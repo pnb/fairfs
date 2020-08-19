@@ -67,7 +67,8 @@ def calc_unfairness(y_true, y_pred, protected_groups, unfairness_metric):
         elif unfairness_metric == 'conditional_procedure':
             measurement = metrics.recall_score(y_true[group_mask], y_pred[group_mask])
         elif unfairness_metric == 'conditional_use_accuracy_equality':
-            measurement = metrics.precision_score(y_true[group_mask], y_pred[group_mask])
+            measurement = metrics.precision_score(y_true[group_mask], y_pred[group_mask],
+                                                  zero_division=0)
         elif unfairness_metric == 'treatment_equality':
             measurement = treatment_score(y_true[group_mask], y_pred[group_mask])
         else:
@@ -77,7 +78,8 @@ def calc_unfairness(y_true, y_pred, protected_groups, unfairness_metric):
             measurements['statistical_parity'].append(measurement)
             measurement = metrics.recall_score(y_true[group_mask], y_pred[group_mask])
             measurements['conditional_procedure'].append(measurement)
-            measurement = metrics.precision_score(y_true[group_mask], y_pred[group_mask])
+            measurement = metrics.precision_score(y_true[group_mask], y_pred[group_mask],
+                                                  zero_division=0)
             measurements['conditional_use_accuracy_equality'].append(measurement)
             measurement = treatment_score(y_true[group_mask], y_pred[group_mask])
             measurements['treatment_equality'].append(measurement)
