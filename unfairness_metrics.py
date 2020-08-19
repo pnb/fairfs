@@ -90,7 +90,7 @@ def calc_unfairness(y_true, y_pred, protected_groups, unfairness_metric):
     if unfairness_metric == 'all_equality':
         return mean(measurements[unfairness_metric])
     else:
-        return max(measurements[unfairness_metric]) - min(measurements[unfairness_metric])
+        return measurements[unfairness_metric][0]
 
 
 class UnfairnessMetric():
