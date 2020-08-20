@@ -1,7 +1,7 @@
 # Load various datasets and provide them in a unified format for easy experimentation.
 # Format of each dataset will be:
 # {
-#   channel_name: {
+#   dataset_name: {
 #       'data': 2D Numpy array of feature values,
 #       'labels': 1D Numpy array of labels (strings),
 #       'participant_ids': 1D Numpy array of ids for cross-validation,
@@ -10,9 +10,10 @@
 # }
 import pandas as pd
 import numpy as np
+from scipy.io import arff
 
 
-def get_uci_student_performance(median_split=False):
+def get_uci_student_performance(median_split=True):
     # This is a regression dataset on final grade in two different courses.
     math = pd.read_csv('data/uci_student_performance/student-mat.csv', sep=';')
     portuguese = pd.read_csv('data/uci_student_performance/student-por.csv', sep=';')
@@ -49,7 +50,47 @@ def get_uci_student_performance(median_split=False):
     }
 
 
-def get_all_datasets(median_split_regression=False):
+def get_uci_student_academics(median_split=True):
+    # This is an ordinal regression dataset with several academic outcome variables:
+    #   tnp and twp -- Grade in two exams: Best, Vg (very good), Good, Pass, Fail
+    #   iap -- Grade on assessments leading up to the final exam
+    #   esp -- End of semester grade
+    data, _ = arff.loadarff('data/uci_student_academics/Sapfile1.arff')
+    df = pd.DataFrame(data)
+    processed = pd.DataFrame({
+        'final_grade': df.esp.map({b'Best': 4, b'Vg': 3, b'Good': 2, b'Pass': 1, b'Fail': 0}),
+        'male': (df['ge'] == b'M').astype(int),
+        # 'caste': df.cst,
+        'overdue_papers': (df['arr'] == b'Y').astype(int),
+        # 'married': df['ms'] == b'Married',  # Zero variance (all unmarried)
+        'rural': (df['ls'] == b'V').astype(int),
+        'free_admission': (df['as'] == b'Free').astype(int),
+        'family_income': df.fmi.map({b'Vh': 4, b'High': 3, b'Am': 2, b'Medium': 1, b'Low': 0}),
+        'family_size': df.fs.map({b'Large': 2, b'Average': 1, b'Small': 0}),
+        'father_edu': df.fq.map({b'Il': 0, b'Um': 1, b'10': 2, b'12': 3, b'Degree': 4, b'Pg': 5}),
+        'mother_edu': df.mq.map({b'Il': 0, b'Um': 1, b'10': 2, b'12': 3, b'Degree': 4, b'Pg': 5}),
+        # 'fo'
+        # 'mo'
+        'friends': df.nf.map({b'Large': 2, b'Average': 1, b'Small': 0}),
+        'study_habits': df.sh.map({b'Good': 2, b'Average': 1, b'Poor': 0}),
+        'previous_private_school': (df['ss'] == b'Private').astype(int),
+        # 'me'
+        'travel_time': df.tt.map({b'Large': 2, b'Average': 1, b'Small': 0}),
+        'attendance': df.atd.map({b'Good': 2, b'Average': 1, b'Poor': 0}),
+    })
+    if median_split:
+        processed.final_grade = (processed.final_grade > processed.final_grade.median()).astype(int)
+    return {
+        'uci_student_academics': {
+            'data': processed[[f for f in processed if f != 'final_grade']].values,
+            'labels': processed.final_grade.values,
+            'participant_ids': np.arange(0, len(processed)),  # Every row is one student
+            'feature_names': np.array([f for f in processed if f != 'final_grade'])
+        }
+    }
+
+
+def get_all_datasets(median_split_regression=True):
     """Return all datasets, optionally converting regression problems to binary classification.
 
     Args:
@@ -62,3 +103,7 @@ def get_all_datasets(median_split_regression=False):
     return {
         **get_uci_student_performance(median_split_regression),
     }
+
+
+if __name__ == '__main__':
+    print(get_uci_student_academics())
