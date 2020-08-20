@@ -69,12 +69,23 @@ def get_uci_student_academics(median_split=True):
         'family_size': df.fs.map({b'Large': 2, b'Average': 1, b'Small': 0}),
         'father_edu': df.fq.map({b'Il': 0, b'Um': 1, b'10': 2, b'12': 3, b'Degree': 4, b'Pg': 5}),
         'mother_edu': df.mq.map({b'Il': 0, b'Um': 1, b'10': 2, b'12': 3, b'Degree': 4, b'Pg': 5}),
-        # 'fo'
-        # 'mo'
+        'father_occupation_service': (df['fo'] == b'Service').astype(int),
+        'father_occupation_business': (df['fo'] == b'Business').astype(int),
+        'father_occupation_retired': (df['fo'] == b'Retired').astype(int),
+        'father_occupation_farmer': (df['fo'] == b'Farmer').astype(int),
+        'father_occupation_others': (df['fo'] == b'Others').astype(int),
+        'mother_occupation_service': (df['mo'] == b'Service').astype(int),
+        'mother_occupation_business': (df['mo'] == b'Business').astype(int),
+        'mother_occupation_retired': (df['mo'] == b'Retired').astype(int),
+        'mother_occupation_housewife': (df['mo'] == b'Housewife').astype(int),
+        'mother_occupation_others': (df['mo'] == b'Others').astype(int),
         'friends': df.nf.map({b'Large': 2, b'Average': 1, b'Small': 0}),
         'study_habits': df.sh.map({b'Good': 2, b'Average': 1, b'Poor': 0}),
         'previous_private_school': (df['ss'] == b'Private').astype(int),
-        # 'me'
+        'instruction_medium_english': (df['me'] == b'Eng').astype(int),
+        'instruction_medium_assamese': (df['me'] == b'Asm').astype(int),
+        'instruction_medium_hindi': (df['me'] == b'Hin').astype(int),
+        'instruction_medium_bengali': (df['me'] == b'Ben').astype(int),
         'travel_time': df.tt.map({b'Large': 2, b'Average': 1, b'Small': 0}),
         'attendance': df.atd.map({b'Good': 2, b'Average': 1, b'Poor': 0}),
     })
