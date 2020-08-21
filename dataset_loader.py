@@ -89,6 +89,9 @@ def get_uci_student_academics(median_split=True):
         'travel_time': df.tt.map({b'Large': 2, b'Average': 1, b'Small': 0}),
         'attendance': df.atd.map({b'Good': 2, b'Average': 1, b'Poor': 0}),
     })
+    for col in list(processed.columns):
+        if processed[col].sum() / len(processed) < .1:
+            processed.drop(columns=[col], inplace=True)  # Remove columns with little variance
     if median_split:
         processed.final_grade = (processed.final_grade > processed.final_grade.median()).astype(int)
     return {
