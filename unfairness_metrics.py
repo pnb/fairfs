@@ -18,7 +18,7 @@ def stat_score(truth, predict):
 
 
 def sigmoid(x):
-    return 1 / (1 + np.exp(-x+1))
+    return (1 / (1 + np.exp(-x+1)))-0.5
 
 
 def treatment_score(truth, predict):
@@ -38,7 +38,7 @@ def treatment_score(truth, predict):
     elif [fp_sum, fn_sum].count(0) == 1:
         return 1
     else:
-        return max(sigmoid(fp_sum/fn_sum), sigmoid(fn_sum/fp_sum))
+        return sigmoid(max(fp_sum/fn_sum, fn_sum/fp_sum))
 
 
 def calc_unfairness(y_true, y_pred, protected_groups, unfairness_metric):
