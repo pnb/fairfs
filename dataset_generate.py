@@ -3,6 +3,7 @@ import numpy as np
 import random
 from collections import Counter
 
+np.random.seed(10)
 
 index = [0] * 500 + [1] * 500
 
