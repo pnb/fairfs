@@ -119,5 +119,16 @@ def get_all_datasets(median_split_regression=True):
     }
 
 
+def load_sample_data():
+    sample_data = pd.read_csv('data/test_file.csv', header=0)
+    X = sample_data.drop('outcome', axis=1)
+    y = sample_data['outcome']
+    return {'data': X.values,
+            'labels': y.values,
+            'participant_ids': np.arange(0, len(sample_data)),
+            'feature_names': np.array([f for f in sample_data if f not in ['outcome']])
+            }
+
+
 if __name__ == '__main__':
     print(get_uci_student_academics())

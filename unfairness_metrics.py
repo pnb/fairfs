@@ -153,18 +153,25 @@ if __name__ == '__main__':
     print(score)
 
     from sklearn import datasets, naive_bayes, model_selection
-    from sklearn import datasets, naive_bayes, model_selection
     import numpy as np
     np.random.seed(11798)
-    X, y = datasets.load_iris(return_X_y=True)
-    y = pd.Series(y)
-    # Since there are systematic biases in per-class accuracy, treating each class as a protected
-    # group lowers the score
-    protected_groups = pd.Series(y)
+    from dataset_loader import load_sample_data
+    ds = load_sample_data()
+    y = pd.Series(ds['labels'])
+    protected_groups = pd.Series(ds['data']['group'])
+    # X = ds['data'][['fair_feature', 'unfair_feature']]
+    X = np.array(ds['data']['unfair_feature']).reshape(-1, 1)
+
+    # X, y = datasets.load_iris(return_X_y=True)
+    # y = pd.Series(y)
+    # # Since there are systematic biases in per-class accuracy, treating each class as a protected
+    # # group lowers the score
+    # protected_groups = pd.Series(y)
     # Conversely, randomly generating the protected groups has little effect (as expected)
     # protected_groups = pd.Series(np.random.randint(0, 2, len(y)))
     clf = naive_bayes.GaussianNB()
-    cm = CombinedMetric(metrics.accuracy_score, protected_groups, 'overall_accuracy_equality', 1)
+    cm = CombinedMetric(metrics.accuracy_score, protected_groups, 'all_equality', 1)
     scoring = metrics.make_scorer(cm)
-    scores = model_selection.cross_val_score(clf, X, y, cv=3, scoring=scoring)
+    cross_val = model_selection.KFold(4, shuffle=True)
+    scores = model_selection.cross_val_score(clf, X, y, cv=cross_val, scoring=scoring)
     print(scores)
