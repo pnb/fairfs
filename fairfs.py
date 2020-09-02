@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 from mlxtend.feature_selection import SequentialFeatureSelector
 from sklearn import metrics, model_selection, pipeline, preprocessing
-from sklearn import linear_model, naive_bayes, ensemble
+from sklearn import linear_model, naive_bayes, tree
 
 import dataset_loader
 import unfairness_metrics
@@ -15,13 +15,14 @@ def run_experiment(X, y, clf, protected_groups, unfairness_metric, unfairness_we
     unfairness_scorer = metrics.make_scorer(metric)
     unfairness_means = []
     kappa_means = []
-    for i in tqdm(range(10), desc=' Training ' + clf.__class__.__name__):
+    for i in tqdm(range(100), desc=' Training ' + clf.__class__.__name__):
         xval = model_selection.KFold(4, shuffle=True, random_state=i)
         # Make a metric combining accuracy and subtracting unfairness w.r.t. the protected groups
         metric = unfairness_metrics.CombinedMetric(metrics.cohen_kappa_score, protected_groups,
                                                    unfairness_metric, unfairness_weight)
         combined_scorer = metrics.make_scorer(metric)
-        sfs = SequentialFeatureSelector(clf, 'best', verbose=0, cv=xval, scoring=combined_scorer)
+        sfs = SequentialFeatureSelector(clf, 'best', verbose=0, cv=xval, scoring=combined_scorer,
+                                        n_jobs=2)
         pipe = pipeline.Pipeline([
             ('standardize', preprocessing.StandardScaler()),
             ('feature_selection', sfs),
@@ -46,10 +47,10 @@ protected_groups = pd.Series(ds['data'][:, ds['feature_names'] == 'group'].T[0])
 
 # RQ1: Does the method reduce unfairness?
 dfs = []
-for m in [naive_bayes.GaussianNB(), linear_model.LogisticRegression(),
-          ensemble.RandomForestClassifier()]:
+for m in [naive_bayes.GaussianNB(), linear_model.LogisticRegression(random_state=11798),
+          tree.DecisionTreeClassifier(random_state=11798)]:
     for unfairness_metric in unfairness_metrics.UNFAIRNESS_METRICS:
-        for unfairness_weight in [0, .5, 1, 2, 4]:
+        for unfairness_weight in [0, 1, 2, 3, 4]:
             print('Training', m.__class__.__name__)
             print('Unfairness metric:', unfairness_metric)
             print('Unfairness metric weight:', unfairness_weight)
