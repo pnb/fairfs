@@ -48,5 +48,4 @@ gen_file['fairness_feature'] = fair_feature
 gen_file['unfairness_feature'] = unfair_feature
 gen_file['outcome'] = outcome
 
-gen_file.to_csv('data/test_file.csv', index=False)
-
+gen_file.to_csv('data/simulated_data.csv', index=False)

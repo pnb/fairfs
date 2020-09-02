@@ -39,13 +39,13 @@ def run_experiment(X, y, clf, protected_groups, unfairness_metric, unfairness_we
 
 # ds = dataset_loader.get_uci_student_performance(median_split=True)['uci_student_performance_math']
 # print(ds.keys())  # data, labels, participant_ids, feature_names
-ds = dataset_loader.load_sample_data()
+ds = dataset_loader.get_simulated_data()
 
 # Pick a column to use as the "protected" group labels
 # protected_groups = pd.Series(ds['data'][:, ds['feature_names'] == 'rural'].T[0])
 protected_groups = pd.Series(ds['data'][:, ds['feature_names'] == 'group'].T[0])
 
-# RQ1: Does the method reduce unfairness?
+# Does the method reduce unfairness?
 dfs = []
 for m in [naive_bayes.GaussianNB(), linear_model.LogisticRegression(random_state=11798),
           tree.DecisionTreeClassifier(random_state=11798)]:
@@ -65,10 +65,9 @@ for m in [naive_bayes.GaussianNB(), linear_model.LogisticRegression(random_state
                 'unfairness': unfairnesses,
                 'kappa': kappas
             }))
-            # pd.concat(dfs).to_csv('fairfs_results.csv', index=False)
+            pd.concat(dfs).to_csv('fairfs_results.csv', index=False)
 
-# RQ2: What features does the model favor if it is optimizing for unfairness?
-
+# What features does the model favor if it is optimizing for unfairness?
 # Select features using the combined metric
 # sfs.fit(X, y)
 # print()
