@@ -42,10 +42,11 @@ for i in range(500, 1000):
     else:
         unfair_feature.append(normalized_outcome[i])
 
-gen_file = pd.DataFrame(columns=['group', 'fairness_feature', 'unfairness_feature', 'outcome'])
-gen_file['group'] = index
-gen_file['fairness_feature'] = fair_feature
-gen_file['unfairness_feature'] = unfair_feature
-gen_file['outcome'] = outcome
+gen_file = pd.DataFrame({
+    'group': index,
+    'fair_feature': fair_feature,
+    'unfair_feature': unfair_feature,
+    'outcome': outcome,
+})
 
 gen_file.to_csv('data/simulated_data.csv', index=False)
