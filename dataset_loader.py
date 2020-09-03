@@ -109,11 +109,14 @@ def get_simulated_data():
     sample_data = pd.read_csv('data/simulated_data.csv', header=0)
     X = sample_data.drop('outcome', axis=1)
     y = sample_data['outcome']
-    return {'data': X.values,
+    return {
+        'simulated_data': {
+            'data': X.values,
             'labels': y.values,
             'participant_ids': np.arange(0, len(sample_data)),
             'feature_names': np.array([f for f in sample_data if f not in ['outcome']])
-            }
+        }
+    }
 
 
 def get_all_datasets(median_split_regression=True):

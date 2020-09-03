@@ -45,9 +45,10 @@ def run_experiment(X, y, clf, protected_groups, unfairness_metric, unfairness_we
     return unfairness_means, kappa_means, selected_feature_props
 
 
-# ds = dataset_loader.get_uci_student_performance(median_split=True)['uci_student_performance_math']
+# ds = dataset_loader.get_uci_student_performance()['uci_student_performance_math']
+# ds = dataset_loader.get_uci_student_academics()['uci_student_academics']
+ds = dataset_loader.get_simulated_data()['simulated_data']
 # print(ds.keys())  # data, labels, participant_ids, feature_names
-ds = dataset_loader.get_simulated_data()
 
 # Pick a column to use as the "protected" group labels
 protected_col_index = np.nonzero(ds['feature_names'] == PROTECTED_COLUMN)[0][0]
