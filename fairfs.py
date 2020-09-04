@@ -10,7 +10,7 @@ import dataset_loader
 import unfairness_metrics
 
 
-PROTECTED_COLUMN = 'group'  # 'group' for simulated data, 'rural' for 2 other datasets
+PROTECTED_COLUMN = 'rural'  # 'group' for simulated data, 'rural' for 2 other datasets
 ITERATIONS = 100
 
 
@@ -20,7 +20,7 @@ def run_experiment(X, y, clf, protected_groups, unfairness_metric, unfairness_we
     unfairness_means = []
     kappa_means = []
     selected_feature_props = np.zeros([ITERATIONS, X.shape[1]])
-    for i in tqdm(range(100), desc=' Training ' + clf.__class__.__name__):
+    for i in tqdm(range(ITERATIONS), desc=' Training ' + clf.__class__.__name__):
         xval = model_selection.KFold(4, shuffle=True, random_state=i)
         # Make a metric combining accuracy and subtracting unfairness w.r.t. the protected groups
         metric = unfairness_metrics.CombinedMetric(metrics.cohen_kappa_score, protected_groups,
@@ -46,8 +46,9 @@ def run_experiment(X, y, clf, protected_groups, unfairness_metric, unfairness_we
 
 
 # ds = dataset_loader.get_uci_student_performance()['uci_student_performance_math']
+ds = dataset_loader.get_uci_student_performance()['uci_student_performance_portuguese']
 # ds = dataset_loader.get_uci_student_academics()['uci_student_academics']
-ds = dataset_loader.get_simulated_data()['simulated_data']
+# ds = dataset_loader.get_simulated_data()['simulated_data']
 # print(ds.keys())  # data, labels, participant_ids, feature_names
 
 # Pick a column to use as the "protected" group labels
@@ -56,6 +57,10 @@ protected_groups = pd.Series(ds['data'][:, protected_col_index])
 
 # Does the method reduce unfairness?
 dfs = []
+try:
+    dfs.append(pd.read_csv('fairfs_results.csv'))
+except FileNotFoundError:
+    pass
 for m in [naive_bayes.GaussianNB(), linear_model.LogisticRegression(random_state=11798),
           tree.DecisionTreeClassifier(random_state=11798)]:
     for unfairness_metric in unfairness_metrics.UNFAIRNESS_METRICS:
@@ -63,6 +68,11 @@ for m in [naive_bayes.GaussianNB(), linear_model.LogisticRegression(random_state
             print('Training', m.__class__.__name__)
             print('Unfairness metric:', unfairness_metric)
             print('Unfairness metric weight:', unfairness_weight)
+            if len(dfs) > 0 and sum((dfs[0].model == m.__class__.__name__) &
+                                    (dfs[0].unfairness_metric == unfairness_metric) &
+                                    (dfs[0].unfairness_weight == unfairness_weight)) > 0:
+                print('Skipping (already done in output file)')
+                continue
             unfairnesses, kappas, feature_selected_props = run_experiment(
                 ds['data'], pd.Series(ds['labels']), m, protected_groups, unfairness_metric,
                 unfairness_weight)
