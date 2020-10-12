@@ -10,7 +10,7 @@ import dataset_loader
 import unfairness_metrics
 
 
-PROTECTED_COLUMN = 'rural'  # 'group' for simulated data, 'rural' for 2 other datasets
+PROTECTED_COLUMN = 'rural'  # 'group' for simulated data, 'rural' for other datasets
 ITERATIONS = 100
 
 
