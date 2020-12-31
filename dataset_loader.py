@@ -104,6 +104,36 @@ def get_uci_student_academics(median_split=True):
     }
 
 
+def get_uci_adult():
+    # Classic UCI "Adult" dataset
+    cols = ['age', 'workclass', 'final_weight', 'education', 'education_num', 'marital_status',
+            'occupation', 'relationship', 'race', 'sex', 'capital_gain', 'capital_loss',
+            'hours_per_week', 'native_country', 'outcome']
+    df = pd.concat([
+        pd.read_csv('data/uci_adult/adult.data', sep=', ', names=cols, engine='python'),
+        pd.read_csv('data/uci_adult/adult.test', skiprows=1, sep=', ', names=cols, engine='python')
+    ]).drop(columns='education')
+    df.outcome = df.outcome.str.replace('.', '')
+    # One-hot encode categorical variables
+    for col in ['workclass', 'marital_status', 'occupation', 'relationship', 'race', 'sex',
+                'native_country', 'outcome']:
+        for val in sorted(df[col].unique())[:-1]:  # Skip last value (reference level)
+            df[col + '_' + val] = (df[col] == val).astype(int)
+        df.drop(columns=col, inplace=True)
+    # Remove columns with mostly zeros
+    for col in df.columns:
+        if df[col].sum() / len(df) < .1:
+            df.drop(columns=col, inplace=True)
+    return {
+        'uci_adult': {
+            'data': df[[f for f in df if f != 'outcome_<=50K']].values,
+            'labels': df['outcome_<=50K'].values,
+            'participant_ids': np.arange(0, len(df)),  # One row per person
+            'feature_names': np.array([f for f in df if f != 'outcome_<=50K'])
+        }
+    }
+
+
 def get_simulated_data():
     # Simple simulated classification dataset with unfair and fair features
     sample_data = pd.read_csv('data/simulated_data.csv', header=0)
@@ -132,9 +162,10 @@ def get_all_datasets(median_split_regression=True):
     return {
         **get_uci_student_performance(median_split_regression),
         **get_uci_student_academics(median_split_regression),
+        **get_uci_adult(),
         **get_simulated_data(),
     }
 
 
 if __name__ == '__main__':
-    print(get_uci_student_academics())
+    print(get_uci_adult())

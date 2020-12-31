@@ -7,5 +7,8 @@ Datasets are not included in the repository. They will need to be added, with th
   * `data/uci_student_performance/student-por.csv`
 * [UCI Student Academics dataset](https://archive.ics.uci.edu/ml/datasets/Student+Academics+Performance)
   * `data/uci_student_academics/Sapfile1.arff`
+* [UCI Adult dataset](https://archive.ics.uci.edu/ml/datasets/Adult)
+  * `data/uci_adult/adult.data`
+  * `data/uci_adult/adult.test`
 * Simulated dataset, created by running `python dataset_generate.py`
   * `data/simulated_data.csv`
