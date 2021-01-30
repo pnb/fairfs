@@ -11,6 +11,8 @@
 import pandas as pd
 import numpy as np
 from scipy.io import arff
+from aif360.datasets import BinaryLabelDataset
+from aif360.algorithms.preprocessing.reweighing import Reweighing
 
 
 def get_uci_student_performance(median_split=True):
@@ -145,6 +147,30 @@ def get_simulated_data():
             'labels': y.values,
             'participant_ids': np.arange(0, len(sample_data)),
             'feature_names': np.array([f for f in sample_data if f not in ['outcome']])
+        }
+    }
+
+
+def get_transformed_simulated_data():
+    sample_data = pd.read_csv('data/simulated_data.csv', header=0)
+
+    pre_transform = BinaryLabelDataset(1.0, 0.0, df=sample_data,
+                                       label_names=['outcome'],
+                                       protected_attribute_names=['group'])
+
+    RW = Reweighing(unprivileged_groups=[{'group': 0}],
+                    privileged_groups=[{'group': 1}])
+    RW.fit(pre_transform)
+    post_transform = RW.transform(pre_transform)
+    ds = post_transform.convert_to_dataframe()[0]
+    X = ds.drop('outcome', axis=1)
+    y = ds['outcome']
+    return {
+        'simulated_data': {
+            'data': X.values,
+            'labels': y.values,
+            'participant_ids': np.arange(0, len(ds)),
+            'feature_names': np.array([f for f in ds if f not in ['outcome']])
         }
     }
 

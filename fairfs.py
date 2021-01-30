@@ -10,7 +10,7 @@ import dataset_loader
 import unfairness_metrics
 
 
-PROTECTED_COLUMN = 'rural'  # 'group' for simulated data, 'rural' for other datasets
+PROTECTED_COLUMN = 'group'  # 'group' for simulated data, 'sex' for adult, 'rural' for other datasets
 ITERATIONS = 100
 
 
@@ -23,7 +23,7 @@ def run_experiment(X, y, clf, protected_groups, unfairness_metric, unfairness_we
     for i in tqdm(range(ITERATIONS), desc=' Training ' + clf.__class__.__name__):
         xval = model_selection.KFold(4, shuffle=True, random_state=i)
         # Make a metric combining accuracy and subtracting unfairness w.r.t. the protected groups
-        metric = unfairness_metrics.CombinedMetric(metrics.cohen_kappa_score, protected_groups,
+        metric = unfairness_metrics.CombinedMetric(metrics.roc_auc_score, protected_groups,
                                                    unfairness_metric, unfairness_weight)
         combined_scorer = metrics.make_scorer(metric)
         sfs = SequentialFeatureSelector(clf, 'best', verbose=0, cv=xval, scoring=combined_scorer,
@@ -46,9 +46,11 @@ def run_experiment(X, y, clf, protected_groups, unfairness_metric, unfairness_we
 
 
 # ds = dataset_loader.get_uci_student_performance()['uci_student_performance_math']
-ds = dataset_loader.get_uci_student_performance()['uci_student_performance_portuguese']
+# ds = dataset_loader.get_uci_student_performance()['uci_student_performance_portuguese']
 # ds = dataset_loader.get_uci_student_academics()['uci_student_academics']
 # ds = dataset_loader.get_simulated_data()['simulated_data']
+ds = dataset_loader.get_transformed_simulated_data()['simulated_data']
+# ds = dataset_loader.get_uci_adult()['uci_adult']
 # print(ds.keys())  # data, labels, participant_ids, feature_names
 
 # Pick a column to use as the "protected" group labels
