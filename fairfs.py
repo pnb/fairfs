@@ -12,18 +12,19 @@ import unfairness_metrics
 
 PROTECTED_COLUMN = 'group'  # 'group' for simulated data, 'sex' for adult, 'rural' for other datasets
 ITERATIONS = 100
+ACCURACY_METRIC = metrics.roc_auc_score
 
 
 def run_experiment(X, y, clf, protected_groups, unfairness_metric, unfairness_weight):
     metric = unfairness_metrics.UnfairnessMetric(protected_groups, unfairness_metric)
     unfairness_scorer = metrics.make_scorer(metric)
     unfairness_means = []
-    kappa_means = []
+    auc_means = []
     selected_feature_props = np.zeros([ITERATIONS, X.shape[1]])
     for i in tqdm(range(ITERATIONS), desc=' Training ' + clf.__class__.__name__):
         xval = model_selection.KFold(4, shuffle=True, random_state=i)
         # Make a metric combining accuracy and subtracting unfairness w.r.t. the protected groups
-        metric = unfairness_metrics.CombinedMetric(metrics.roc_auc_score, protected_groups,
+        metric = unfairness_metrics.CombinedMetric(ACCURACY_METRIC, protected_groups,
                                                    unfairness_metric, unfairness_weight)
         combined_scorer = metrics.make_scorer(metric)
         sfs = SequentialFeatureSelector(clf, 'best', verbose=0, cv=xval, scoring=combined_scorer,
@@ -35,21 +36,21 @@ def run_experiment(X, y, clf, protected_groups, unfairness_metric, unfairness_we
         ])
         result = model_selection.cross_validate(pipe, X, y, verbose=0, cv=xval, scoring={
             'unfairness': unfairness_scorer,
-            'kappa': metrics.make_scorer(metrics.cohen_kappa_score),
+            'auc': metrics.make_scorer(ACCURACY_METRIC),
         }, return_estimator=True)
         unfairness_means.append(result['test_unfairness'].mean())
-        kappa_means.append(result['test_kappa'].mean())
+        auc_means.append(result['test_auc'].mean())
         for estimator in result['estimator']:
             for feature_i in estimator.named_steps['feature_selection'].k_feature_idx_:
                 selected_feature_props[i][feature_i] += 1 / len(result['estimator'])
-    return unfairness_means, kappa_means, selected_feature_props
+    return unfairness_means, auc_means, selected_feature_props
 
 
 # ds = dataset_loader.get_uci_student_performance()['uci_student_performance_math']
 # ds = dataset_loader.get_uci_student_performance()['uci_student_performance_portuguese']
 # ds = dataset_loader.get_uci_student_academics()['uci_student_academics']
-# ds = dataset_loader.get_simulated_data()['simulated_data']
-ds = dataset_loader.get_transformed_simulated_data()['simulated_data']
+ds = dataset_loader.get_simulated_data()['simulated_data']
+# ds = dataset_loader.get_transformed_simulated_data()['simulated_data']
 # ds = dataset_loader.get_uci_adult()['uci_adult']
 # print(ds.keys())  # data, labels, participant_ids, feature_names
 
@@ -75,16 +76,16 @@ for m in [naive_bayes.GaussianNB(), linear_model.LogisticRegression(random_state
                                     (dfs[0].unfairness_weight == unfairness_weight)) > 0:
                 print('Skipping (already done in output file)')
                 continue
-            unfairnesses, kappas, feature_selected_props = run_experiment(
+            unfairnesses, aucs, feature_selected_props = run_experiment(
                 ds['data'], pd.Series(ds['labels']), m, protected_groups, unfairness_metric,
                 unfairness_weight)
             dfs.append(pd.DataFrame({
-                'model': [m.__class__.__name__] * len(kappas),
-                'unfairness_metric': [unfairness_metric] * len(kappas),
-                'unfairness_weight': [unfairness_weight] * len(kappas),
-                'iteration': range(1, len(kappas) + 1),
+                'model': [m.__class__.__name__] * len(aucs),
+                'unfairness_metric': [unfairness_metric] * len(aucs),
+                'unfairness_weight': [unfairness_weight] * len(aucs),
+                'iteration': range(1, len(aucs) + 1),
                 'unfairness': unfairnesses,
-                'kappa': kappas,
+                'auc': aucs,
                 'protected_column_selected_prop': feature_selected_props[:, protected_col_index],
             }))
             # What features does the model favor if it is optimizing for unfairness?
