@@ -11,8 +11,6 @@
 import pandas as pd
 import numpy as np
 from scipy.io import arff
-from aif360.datasets import BinaryLabelDataset
-from aif360.algorithms.preprocessing.reweighing import Reweighing
 
 
 def get_uci_student_performance(median_split=True):
