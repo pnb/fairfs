@@ -10,7 +10,7 @@ import dataset_loader
 import unfairness_metrics
 
 
-PROTECTED_COLUMN = 'group'  # 'group' for simulated data, 'sex' for adult, 'rural' for other datasets
+PROTECTED_COLUMN = 'group'  # 'group' for simulated data, 'sex_Female' for adult, 'rural' for other datasets
 ITERATIONS = 100
 ACCURACY_METRIC = metrics.roc_auc_score
 
@@ -50,7 +50,6 @@ def run_experiment(X, y, clf, protected_groups, unfairness_metric, unfairness_we
 # ds = dataset_loader.get_uci_student_performance()['uci_student_performance_portuguese']
 # ds = dataset_loader.get_uci_student_academics()['uci_student_academics']
 ds = dataset_loader.get_simulated_data()['simulated_data']
-# ds = dataset_loader.get_transformed_simulated_data()['simulated_data']
 # ds = dataset_loader.get_uci_adult()['uci_adult']
 # print(ds.keys())  # data, labels, participant_ids, feature_names
 
