@@ -1,11 +1,11 @@
 # Performs Mann-Whitney U-tests
-# Results: input data. Name: name to attach to csv. 
+# Results: input data. Name: name to attach to csv.
 # Shift: The step between unfairness weights being compared.
 # Column: which feature is being tested
 doUTest <- function(results, name, shift, column) {
   # create cutoff for loop based on shift. 9000 comes from data points per metric
   cutoff = 9000-(100*(shift))
-  
+
   # create empty data frame to store results
   all_results <- data.frame("model"="",
                             "unfairness_metric"="",
@@ -15,14 +15,14 @@ doUTest <- function(results, name, shift, column) {
                             "p-value"=""
                             )
   datalist = list()
-  
+
   for(n in seq(1,cutoff,100)){
     # define indices
     i_one = n
     i_two = n+99
     i_three = n+100 * shift
     i_four = n + 100 * shift + 99
-    
+
     model_first = results[i_one, "model"]
     metric_first = results[i_one, "unfairness_metric"]
     model_second = results[i_three, "model"]
@@ -49,14 +49,14 @@ doUTest <- function(results, name, shift, column) {
 }
 
 
-# read data. Sorry this is hardcoded... couldn't figure out R's directory situation
-sim_data = read.csv('/Users/clarabelitz/Documents/git/illinois/fairfs/fairfs_results-simulated_data.csv')
-sp_math_data = read.csv('/Users/clarabelitz/Documents/git/illinois/fairfs/fairfs_results-student-performance-math-updated.csv')
-sp_port_data = read.csv("/Users/clarabelitz/Documents/git/illinois/fairfs/fairfs_results-student-performance-port-updated.csv")
-sa_data = read.csv('/Users/clarabelitz/Documents/git/illinois/fairfs/fairfs_results-student-academics-updated.csv')
+# read data.
+sim_data = read.csv('fairfs_results_simulated_data.csv')
+sp_math_data = read.csv('fairfs_results_uci_student_performance_math.csv')
+sp_port_data = read.csv('fairfs_results_uci_student_performance_portuguese.csv')
+sa_data = read.csv('fairfs_results_uci_student_academics.csv')
+adult_data = read.csv('fairfs_results_uci_adult.csv')
 
-# perform U tests for all steps between 1 and 4, inclusive. Edit to adjust which data is used
+# perform U tests for all steps between 1 and 4, inclusive. Edit to adjust which data is used. Works for 'unfairness' and 'protected_column_selected_prop'
 for(n in 1:4) {
-  doUTest(sp_port_data, "sp_port_data", n, "protected_column_selected_prop")
+  doUTest(adult_data, "adult_data", n, "protected_column_selected_prop")
 }
-

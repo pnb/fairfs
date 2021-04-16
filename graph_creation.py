@@ -8,11 +8,11 @@ import random
 
 # replace with names of datasets. Can incorporate path structure if desired
 DATASETS = [
-    'fairfs_results_synthetic_auc_2.csv',
-    'fairfs_results_adult_auc_2.csv',
-    'data_auc_march_2019/fairfs_results_uci_student_academics_auc_2.csv',
-    'fairfs_results_uci_student_performance_math_auc_2.csv',
-    'fairfs_results_uci_student_performance_portuguese_auc_2.csv'
+    'fairfs_results_simulated_data.csv',
+    'fairfs_results_uci_adult.csv',
+    'fairfs_results_uci_student_academics.csv',
+    'fairfs_results_uci_student_performance_math.csv',
+    'fairfs_results_uci_student_performance_portuguese.csv'
 ]
 
 # Titles in same order as datasets
@@ -25,16 +25,19 @@ TITLES = [
 ]
 
 DATA_DICT = {}
-
+# create dictionary of titles and datasets to use for graph titles
 for i in range(len(DATASETS)):
     DATA_DICT[TITLES[i]] = DATASETS[i]
 
 
+# read in data
 def create_data_arrays(sheet_name):
     results = pd.read_csv(sheet_name, sep=',')
     return results
 
 
+# create a plot with each unfairness metric.
+# Note this is hardcoded in the order they run in the experiment
 def create_plot(title, results, location):
     x = list(range(0, 5))
     title = title
@@ -108,7 +111,6 @@ def all_correlation():
     for key, value in DATA_DICT.items():
         results = create_data_arrays(value)
         correlations[key] = calc_correl(results)
-
     return correlations
 
 
@@ -127,7 +129,6 @@ def calc_correl(results):
             'correlation': corr,
             'p-value': p
         })
-
     return correlations
 
 
@@ -157,4 +158,4 @@ if __name__ == '__main__':
     make_all_accuracy_plots()
     make_all_unfairness_plots()
     # all_correlation()
-    # plot_correlations()
+    plot_correlations()
