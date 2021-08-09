@@ -106,3 +106,8 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# R files
+.RData
+.Rapp.history
+.Rhistory

@@ -2,9 +2,14 @@ import pandas as pd
 from scipy.stats import pearsonr
 import scipy
 import matplotlib.pyplot as plt
+import matplotlib
 from matplotlib.lines import Line2D
 import numpy as np
 import random
+
+# ensure plots are saved with correct font type
+matplotlib.rcParams['pdf.fonttype'] = 42
+matplotlib.rcParams['ps.fonttype'] = 42
 
 # replace with names of datasets. Can incorporate path structure if desired
 DATASETS = [
@@ -12,7 +17,8 @@ DATASETS = [
     'fairfs_results_uci_adult.csv',
     'fairfs_results_uci_student_academics.csv',
     'fairfs_results_uci_student_performance_math.csv',
-    'fairfs_results_uci_student_performance_portuguese.csv'
+    'fairfs_results_uci_student_performance_portuguese.csv',
+    'fairfs_results_simulated_data_reweighed.csv'
 ]
 
 # Titles in same order as datasets
@@ -21,13 +27,15 @@ TITLES = [
     'Adult',
     'Student Academics',
     'Student Performance (Math)',
-    'Student Performance (Portuguese)'
+    'Student Performance (Portuguese)',
+    'Simulated Data - Reweighed'
+
 ]
 
 DATA_DICT = {}
 # create dictionary of titles and datasets to use for graph titles
 for i in range(len(DATASETS)):
-    DATA_DICT[TITLES[i]] = DATASETS[i]
+    DATA_DICT[TITLES[i]] = 'results/' + DATASETS[i]
 
 
 # read in data
@@ -136,7 +144,7 @@ def plot_correlations():
     results = create_data_arrays(DATA_DICT['Student Academics'])
     # scatter plot a few correlations as an example.
     # randomly select indices to plot (can hardcode if desired)
-    # indices = [2000, 5500, 7000]
+    # indices = [2000, 5500, 7000] # plots used for AIES paper
     indices = random.sample(range(0, 9000, 500), 3)
     for i in indices:
         auc = results['auc'][i:i + 499]
