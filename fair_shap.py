@@ -8,7 +8,6 @@ from sklearn import metrics, model_selection, pipeline, preprocessing
 from sklearn import tree
 
 import dataset_loader
-import unfairness_metrics
 
 
 PROTECTED_COLUMN = 'Sex'  # 'Sex' for adult, 'group' for synthetic
@@ -38,9 +37,15 @@ def run_model(data, labels):
     a dataframe of accuracy (AUC) for each iteration, a list of shap values
     for each datapoint, and prediction labels for each data point.
 
-    Keyword arguments:
-    data: pandas dataframe of data to be used in model
-    labels: list of labels for data
+    Args:
+        data (DataFrame): data to be used in model
+        labels (list): labels for data being used in model
+
+    Returns:
+        List: list of DataFrames (one per CV fold) with AUC accuracy
+        DataFrame: shapley values for the model
+        DataFrame: predicted labels for the model
+
     """
     # Create the DataFrame to hold the SHAP results, labels, and accuracy
     shap_vals = pd.DataFrame(index=data.index, columns=data.columns)
@@ -78,8 +83,18 @@ def run_model(data, labels):
 
 
 def convert_shap_to_bools(data, shap_values):
-    """ Convert all values to 0 or 1 where 0 is a neg shap value and 1 is a
-    pos shap value
+    """
+    Convert shapley values to booleans. If shapley value is less than 0, then
+    set to 0. If greater than or equal to 0, set to 1. This allows for
+    traditional fairness metrics to be applied to shapley values.
+
+    Args:
+        data (DataFrame): original dataset used for train and test
+        shap_values (DataFrame): shapley values for the model
+
+    Returns:
+        DataFrame: converted shapley values for the dataset
+
     """
     converted_df = pd.DataFrame(index=data.index, columns=data.columns)
     for column in shap_values:
@@ -93,28 +108,52 @@ def convert_shap_to_bools(data, shap_values):
 
 
 def marginal_dist(truth, predict):
-    """ Calculate marginal distribution (percentage of cases where truth equals
-    prediction)
+    """
+    Calculate marginal distribution
+
+    Args:
+        truth (list): truth labels for the given data
+        predict (list): predicted labels for the given data
+
+    Returns:
+        float: marginal distribution score for the given data
+
     """
     tp_tn_index = truth == predict
     return (np.count_nonzero(tp_tn_index)) / len(predict)
 
 
 def treatment_score(truth, predict):
-    """ Calculate treatement score (here using ration of false neg to false pos)"""
+    """
+    Calculate treatement score (here using ration of false neg to false pos)
+
+    Args:
+        truth (list): truth labels for the given data
+        predict (list): predicted labels for the given data
+
+    Returns:
+        float: treatment score for the given data
+
+    """
     fn_index = [1 for i in range(len(predict)) if truth[i] != predict[i] if truth[i] == 0]
     fp_index = [1 for i in range(len(predict)) if truth[i] != predict[i] if truth[i] == 1]
     return len(fn_index) / len(fp_index)
 
 
-def calc_fairness_scores(data, labels, cols, shap_values):
-    """ Calculate marginal distribution for priv and unpriv group, then find ratio.
-    Return a dataframe with all three values per column (feature)
-    to-do: remove male and female as hard-coded values
-    to-do: only return
+def calc_fairness_scores(data, labels, shap_values):
     """
+    Calculate fairness scores for the existing metrics and store for each column.
 
-    all_fairness_scores = [pd.DataFrame(index=STAT_PARITY_COLUMNS_ADULT, columns=cols)]
+    Args:
+        data (DataFrame): original dataset used for train and test
+        labels (Array): list of truth labels for the data
+        shap_values (DataFrame): shapley labels for the model
+    Returns:
+        DataFrame: fairness scores for each column
+
+    """
+    cols = data.columns
+    all_fairness_scores = [pd.DataFrame(index=data.index, columns=cols)]
     converted_df = convert_shap_to_bools(data, shap_values)
 
     priv_indices = (pd.DataFrame((
