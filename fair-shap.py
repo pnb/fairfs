@@ -107,33 +107,40 @@ def treatment_score(truth, predict):
     return len(fn_index) / len(fp_index)
 
 
-def stat_parity(data, labels, cols, shap_values):
+def calc_fairness_scores(data, labels, cols, shap_values):
     """ Calculate marginal distribution for priv and unpriv group, then find ratio.
     Return a dataframe with all three values per column (feature)
+    to-do: remove male and female as hard-coded values
+    to-do: only return
     """
-    all_marginal_dist = pd.DataFrame(index=STAT_PARITY_COLUMNS_ADULT, columns=cols)
+
+    all_fairness_scores = [pd.DataFrame(index=STAT_PARITY_COLUMNS_ADULT, columns=cols)]
     converted_df = convert_shap_to_bools(data, shap_values)
 
-    privileged_indices = (pd.DataFrame((
+    priv_indices = (pd.DataFrame((
         [data.loc[X[PROTECTED_COLUMN] == PRIVILEGED_VALUE]])[0])).index
-    privileged_labels = labels[privileged_indices]
+    priv_truth = labels[priv_indices]
 
-    unprivileged_indices = (pd.DataFrame((
+    unpriv_indices = (pd.DataFrame((
         [data.loc[X[PROTECTED_COLUMN] == UNPRIVILEGED_VALUE]])[0])).index
-    unprivileged_labels = labels[unprivileged_indices]
+    unpriv_truth = labels[unpriv_indices]
 
     for col in cols:
-        all_marginal_dist[col]['male'] = marginal_dist(privileged_labels,
-                                                       converted_df[col].
-                                                       iloc[privileged_indices].
-                                                       tolist())
-        all_marginal_dist[col]['female'] = marginal_dist(unprivileged_labels,
-                                                         converted_df[col].
-                                                         iloc[unprivileged_indices].
-                                                         tolist())
-        all_marginal_dist[col]['ratio'] = all_marginal_dist[col]['male'] / all_marginal_dist[col]['female']
+        # Get predictions for privileged and unprivileged classes
+        priv_predict = converted_df[col].iloc[priv_indices].tolist()
+        unpriv_predict = converted_df[col].iloc[unpriv_indices].tolist()
 
-    return all_marginal_dist
+        # Get statistical parity (ratio of marginal distributions)
+        priv_marg_dist = marginal_dist(priv_truth, priv_predict)
+        unpriv_marg_dist = marginal_dist(unpriv_truth, unpriv_predict)
+        all_fairness_scores[col]['stat_parity'] = priv_marg_dist / unpriv_marg_dist
+
+        # Get treatment score, stored as ratio for comparison purposes
+        priv_treatment_eq = treatment_score(priv_truth, priv_predict)
+        unpriv_treatment_eq = treatment_score(unpriv_truth, unpriv_predict)
+        all_fairness_scores[col]['treatment_eq_ratio'] = priv_treatment_eq / unpriv_treatment_eq
+
+    return all_fairness_scores
 
 
 if __name__ == "__main__":
