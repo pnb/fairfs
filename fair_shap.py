@@ -22,6 +22,7 @@ COLUMNS_ADULT = ['Age', 'Workclass', 'Education-Num', 'Marital Status',
                  'Capital Loss', 'Hours per week', 'Country']
 STAT_PARITY_COLUMNS_SYNTH = ['group 1', 'group 0', 'ratio']
 STAT_PARITY_COLUMNS_ADULT = ['male', 'female', 'ratio']
+FAIRNESS_METRICS_LIST = ['overall_accuracy', 'stat_parity', 'treatment_eq_ratio']
 
 
 # Get average of values in dictionary
@@ -82,6 +83,10 @@ def run_model(data, labels):
     return accuracy, shap_vals, pred_labels
 
 
+def select_features(labels, shap_values):
+    pass
+
+
 def convert_shap_to_bools(data, shap_values):
     """
     Convert shapley values to booleans. If shapley value is less than 0, then
@@ -90,7 +95,7 @@ def convert_shap_to_bools(data, shap_values):
 
     Args:
         data (DataFrame): original dataset used for train and test
-        shap_values (DataFrame): shapley values for the model
+        shap_values (DataFrame): shapley values for the model (same size as data)
 
     Returns:
         DataFrame: converted shapley values for the dataset
@@ -105,6 +110,22 @@ def convert_shap_to_bools(data, shap_values):
         converted_df[column] = values
 
     return converted_df
+
+
+def overall_accuracy(truth, predict):
+    """
+    Calculate overall accuracy for each group
+
+    Args:
+        truth (list): truth labels for the given data
+        predict (list): predicted labels for the given data
+
+    Returns:
+        float: overall accuracy for the given data and model
+
+    """
+    tp_tn_index = truth == predict
+    return (np.count_nonzero(tp_tn_index)) / len(predict)
 
 
 def marginal_dist(truth, predict):
@@ -125,7 +146,7 @@ def marginal_dist(truth, predict):
 
 def treatment_score(truth, predict):
     """
-    Calculate treatement score (here using ration of false neg to false pos)
+    Calculate treatement score (here using ratio of false neg to false pos)
 
     Args:
         truth (list): truth labels for the given data
@@ -153,7 +174,7 @@ def calc_fairness_scores(data, labels, shap_values):
 
     """
     cols = data.columns
-    all_fairness_scores = [pd.DataFrame(index=data.index, columns=cols)]
+    all_fairness_scores = pd.DataFrame(index=FAIRNESS_METRICS_LIST, columns=cols)
     converted_df = convert_shap_to_bools(data, shap_values)
 
     priv_indices = (pd.DataFrame((
@@ -169,12 +190,26 @@ def calc_fairness_scores(data, labels, shap_values):
         priv_predict = converted_df[col].iloc[priv_indices].tolist()
         unpriv_predict = converted_df[col].iloc[unpriv_indices].tolist()
 
+        # Get overall accuracy ratio
+        # close to 1 means equally accurate for both groups
+        # greater than 1 means priv group has more accurate predictions
+        # less than 1 means unpriv group has more accurate predictions
+        priv_accuracy = overall_accuracy(priv_truth, priv_predict)
+        unpriv_accuracy = overall_accuracy(unpriv_truth, unpriv_predict)
+        all_fairness_scores[col]['stat_parity'] = priv_accuracy / unpriv_accuracy
+
         # Get statistical parity (ratio of marginal distributions)
+        # close to 1 means marginal distributions are equal
+        # less than 1 means priv group has fewer predicted pos than unpriv
+        # greater than 1 means priv group has more predicted pos than unpriv
         priv_marg_dist = marginal_dist(priv_truth, priv_predict)
         unpriv_marg_dist = marginal_dist(unpriv_truth, unpriv_predict)
         all_fairness_scores[col]['stat_parity'] = priv_marg_dist / unpriv_marg_dist
 
         # Get treatment score, stored as ratio for comparison purposes
+        # greater than 1 means unpriv group has greater false neg to false pos ratio than priv group
+        # 1 is equal rates of false neg to false pos for both groups
+        # less than 1 means priv group has greater false neg to false pos ratio than unpriv group
         priv_treatment_eq = treatment_score(priv_truth, priv_predict)
         unpriv_treatment_eq = treatment_score(unpriv_truth, unpriv_predict)
         all_fairness_scores[col]['treatment_eq_ratio'] = priv_treatment_eq / unpriv_treatment_eq
@@ -193,11 +228,16 @@ if __name__ == "__main__":
 
     accuracy, shap_values, pred_labels = run_model(X, y)
 
+    fairness_values = calc_fairness_scores(X, y, shap_values)
+
+    # select_features(shap_values, pred_labels)
+
     # results = pd.DataFrame({
     #     'shap_values': shap_values,
     #     'pred_labels': pred_labels
     # })
 
     # accuracy.to_csv('fairfs_shap_accuracy.csv', index=False, encoding='utf-8') #to do: fix
-    shap_values.to_csv('fairfs_shap_results.csv', index=False, encoding='utf-8')
-    pred_labels.to_csv('fairfs_shap_labels.csv', index=False, encoding='utf-8')
+    # shap_values.to_csv('fairfs_shap_results.csv', index=False, encoding='utf-8')
+    # pred_labels.to_csv('fairfs_shap_labels.csv', index=False, encoding='utf-8')
+    fairness_values.to_csv('fairfs_fairness_values.csv', index=True, encoding='utf-8')
