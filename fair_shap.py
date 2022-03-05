@@ -23,14 +23,53 @@ COLUMNS_ADULT = ['Age', 'Workclass', 'Education-Num', 'Marital Status',
 STAT_PARITY_COLUMNS_SYNTH = ['group 1', 'group 0', 'ratio']
 STAT_PARITY_COLUMNS_ADULT = ['male', 'female', 'ratio']
 FAIRNESS_METRICS_LIST = ['overall_accuracy', 'stat_parity', 'treatment_eq_ratio']
+SELECTION_METRIC = 'stat_parity' # change as desired
 
 
-# Get average of values in dictionary
-def average_val(dict):
-    avgs = {}
-    for key, val in dict.items():
-        avgs[key] = np.mean(val)
-    return avgs
+def main():
+    # Adult dataset (comes pre-cleaned in shap library)
+    X, y = shap.datasets.adult()
+    columns = X.columns
+
+    # Simulated dataset
+    # ds = dataset_loader.get_simulated_data()['simulated_data']
+    # X, y = ds['data'], pd.Series(ds['labels'])
+
+    # Create list to hold fairness and accuracy for each run
+    results = []
+
+    # Create 10-fold cross-validation train test split for the overall model
+    cross_val = model_selection.KFold(10, shuffle=True, random_state=11798)
+
+    for train_index, test_index in cross_val.split(X, y):
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        y_train, y_test = y[train_index], y[test_index]
+
+        X_train = pd.DataFrame(X_train, columns=columns)
+
+        # run initial model for feature selection on training data only
+        accuracy, shap_values, pred_labels = run_model(X_train, y_train)
+        fairness_values = calc_feature_fairness_scores(X_train, y_train, shap_values)
+
+        selected_features = select_features(fairness_values)
+
+        # specificy columns to include
+        X_train_new = pd.DataFrame(X_train, columns=selected_features)
+        X_test = pd.DataFrame(X_test, columns=selected_features)
+
+        # Run the model as defined in the constants, get predictions and accuracy
+        model = MODEL.fit(X_train_new, y_train)
+        predictions = model.predict(X_test)
+        results.append(pd.Series({
+            'model': MODEL,
+            'unfairness_metric': SELECTION_METRIC,
+            'auc': ACCURACY_METRIC(y_test, predictions),
+            'columns': selected_features,
+        }))
+
+    # shap_values.to_csv('fairfs_shap_results1.csv', index=False, encoding='utf-8')
+    # pred_labels.to_csv('fairfs_shap_labels1.csv', index=False, encoding='utf-8')
+    # fairness_values.to_csv('fairfs_fairness_values1.csv', index=True, encoding='utf-8')
 
 
 def run_model(data, labels):
@@ -57,7 +96,7 @@ def run_model(data, labels):
     cross_val = model_selection.KFold(4, shuffle=True, random_state=11798)
 
     for train_index, test_index in cross_val.split(data, labels):
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        X_train, X_test = data.iloc[train_index], data.iloc[test_index]
         y_train, y_test = labels[train_index], labels[test_index]
 
         X_train = pd.DataFrame(X_train, columns=data.columns)
@@ -83,8 +122,21 @@ def run_model(data, labels):
     return accuracy, shap_vals, pred_labels
 
 
-def select_features(labels, shap_values):
-    pass
+def select_features(columnwise_values):
+    """
+    Take fairness values for each column and use the given metric to remove
+    most unfair features using cutoff.
+
+    Args:
+        columnwise_values (DataFrame): DataFrame containing fairness calculation for each column
+
+    Returns:
+        Series: Series object of columns to use
+
+    """
+    col_values = columnwise_values.loc[SELECTION_METRIC]
+    # to-do: add selection mechanism
+    return col_values
 
 
 def convert_shap_to_bools(data, shap_values):
@@ -121,27 +173,25 @@ def overall_accuracy(truth, predict):
         predict (list): predicted labels for the given data
 
     Returns:
-        float: overall accuracy for the given data and model
+        float: overall percentage of true pos and negs for the given data and model
 
     """
     tp_tn_index = truth == predict
     return (np.count_nonzero(tp_tn_index)) / len(predict)
 
 
-def marginal_dist(truth, predict):
+def marginal_dist(predict):
     """
     Calculate marginal distribution
 
     Args:
-        truth (list): truth labels for the given data
         predict (list): predicted labels for the given data
 
     Returns:
         float: marginal distribution score for the given data
 
     """
-    tp_tn_index = truth == predict
-    return (np.count_nonzero(tp_tn_index)) / len(predict)
+    return (np.count_nonzero(predict)) / len(predict)
 
 
 def treatment_score(truth, predict):
@@ -161,7 +211,7 @@ def treatment_score(truth, predict):
     return len(fn_index) / len(fp_index)
 
 
-def calc_fairness_scores(data, labels, shap_values):
+def calc_feature_fairness_scores(data, labels, shap_values):
     """
     Calculate fairness scores for the existing metrics and store for each column.
 
@@ -178,11 +228,11 @@ def calc_fairness_scores(data, labels, shap_values):
     converted_df = convert_shap_to_bools(data, shap_values)
 
     priv_indices = (pd.DataFrame((
-        [data.loc[X[PROTECTED_COLUMN] == PRIVILEGED_VALUE]])[0])).index
+        [data.loc[data[PROTECTED_COLUMN] == PRIVILEGED_VALUE]])[0])).index
     priv_truth = labels[priv_indices]
 
     unpriv_indices = (pd.DataFrame((
-        [data.loc[X[PROTECTED_COLUMN] == UNPRIVILEGED_VALUE]])[0])).index
+        [data.loc[data[PROTECTED_COLUMN] == UNPRIVILEGED_VALUE]])[0])).index
     unpriv_truth = labels[unpriv_indices]
 
     for col in cols:
@@ -202,8 +252,8 @@ def calc_fairness_scores(data, labels, shap_values):
         # close to 1 means marginal distributions are equal
         # less than 1 means priv group has fewer predicted pos than unpriv
         # greater than 1 means priv group has more predicted pos than unpriv
-        priv_marg_dist = marginal_dist(priv_truth, priv_predict)
-        unpriv_marg_dist = marginal_dist(unpriv_truth, unpriv_predict)
+        priv_marg_dist = marginal_dist(priv_predict)
+        unpriv_marg_dist = marginal_dist(unpriv_predict)
         all_fairness_scores[col]['stat_parity'] = priv_marg_dist / unpriv_marg_dist
 
         # Get treatment score, stored as ratio for comparison purposes
@@ -218,26 +268,4 @@ def calc_fairness_scores(data, labels, shap_values):
 
 
 if __name__ == "__main__":
-    # Adult dataset (comes pre-cleaned in shap library)
-    X, y = shap.datasets.adult()
-    columns = X.columns
-
-    # Simulated dataset
-    # ds = dataset_loader.get_simulated_data()['simulated_data']
-    # X, y = ds['data'], pd.Series(ds['labels'])
-
-    accuracy, shap_values, pred_labels = run_model(X, y)
-
-    fairness_values = calc_fairness_scores(X, y, shap_values)
-
-    # select_features(shap_values, pred_labels)
-
-    # results = pd.DataFrame({
-    #     'shap_values': shap_values,
-    #     'pred_labels': pred_labels
-    # })
-
-    # accuracy.to_csv('fairfs_shap_accuracy.csv', index=False, encoding='utf-8') #to do: fix
-    # shap_values.to_csv('fairfs_shap_results.csv', index=False, encoding='utf-8')
-    # pred_labels.to_csv('fairfs_shap_labels.csv', index=False, encoding='utf-8')
-    fairness_values.to_csv('fairfs_fairness_values.csv', index=True, encoding='utf-8')
+    main()
