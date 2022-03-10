@@ -2,8 +2,6 @@
 import shap
 import pandas as pd
 import numpy as np
-from tqdm import tqdm
-from mlxtend.feature_selection import SequentialFeatureSelector
 from sklearn import metrics, model_selection, pipeline, preprocessing
 from sklearn import tree
 
@@ -22,18 +20,22 @@ COLUMNS_ADULT = ['Age', 'Workclass', 'Education-Num', 'Marital Status',
                  'Capital Loss', 'Hours per week', 'Country']
 STAT_PARITY_COLUMNS_SYNTH = ['group 1', 'group 0', 'ratio']
 STAT_PARITY_COLUMNS_ADULT = ['male', 'female', 'ratio']
-FAIRNESS_METRICS_LIST = ['overall_accuracy', 'stat_parity', 'treatment_eq_ratio']
+FAIRNESS_METRICS_LIST = ['stat_parity', 'treatment_eq_ratio']
 SELECTION_METRIC = 'stat_parity' # change as desired
-
+SELECTION_CUTOFFS = [.1, .2, .3, .4]
+CUTOFF_VALUE = 0.2
 
 def main():
-    # Adult dataset (comes pre-cleaned in shap library)
-    X, y = shap.datasets.adult()
-    columns = X.columns
+    # define model to be used
+    model = tree.DecisionTreeClassifier(random_state=11798)
 
     # Simulated dataset
     # ds = dataset_loader.get_simulated_data()['simulated_data']
     # X, y = ds['data'], pd.Series(ds['labels'])
+
+    # Adult dataset (comes pre-cleaned in shap library)
+    X, y = shap.datasets.adult()
+    columns = X.columns
 
     # Create list to hold fairness and accuracy for each run
     results = []
@@ -51,20 +53,22 @@ def main():
         accuracy, shap_values, pred_labels = run_model(X_train, y_train)
         fairness_values = calc_feature_fairness_scores(X_train, y_train, shap_values)
 
-        selected_features = select_features(fairness_values)
+        selected_features = select_features(fairness_values, CUTOFF_VALUE)
 
-        # specificy columns to include
-        X_train_new = pd.DataFrame(X_train, columns=selected_features)
+        # specify columns to include
+        X_train_drop_features = pd.DataFrame(X_train, columns=selected_features)
         X_test = pd.DataFrame(X_test, columns=selected_features)
 
         # Run the model as defined in the constants, get predictions and accuracy
-        model = MODEL.fit(X_train_new, y_train)
+        model.fit(X_train_drop_features, y_train)
         predictions = model.predict(X_test)
+
         results.append(pd.Series({
-            'model': MODEL,
+            'model': MODEL.__class__.__name__,
             'unfairness_metric': SELECTION_METRIC,
             'auc': ACCURACY_METRIC(y_test, predictions),
-            'columns': selected_features,
+            'model_fairness': calc_overall_fairness_scores(X_test, y_test, predictions),
+            'columns': selected_features
         }))
 
     # shap_values.to_csv('fairfs_shap_results1.csv', index=False, encoding='utf-8')
@@ -103,7 +107,7 @@ def run_model(data, labels):
         X_test = pd.DataFrame(X_test, columns=data.columns)
 
         # Run the model as defined in the constants, get predictions and accuracy
-        model = MODEL.fit(X_train, y_train)
+        model.fit(X_train, y_train)
         predictions = model.predict(X_test)
         accuracy.append(pd.Series({
             'label_type': 'y',
@@ -122,7 +126,7 @@ def run_model(data, labels):
     return accuracy, shap_vals, pred_labels
 
 
-def select_features(columnwise_values):
+def select_features(columnwise_values, cutoff_value):
     """
     Take fairness values for each column and use the given metric to remove
     most unfair features using cutoff.
@@ -240,14 +244,6 @@ def calc_feature_fairness_scores(data, labels, shap_values):
         priv_predict = converted_df[col].iloc[priv_indices].tolist()
         unpriv_predict = converted_df[col].iloc[unpriv_indices].tolist()
 
-        # Get overall accuracy ratio
-        # close to 1 means equally accurate for both groups
-        # greater than 1 means priv group has more accurate predictions
-        # less than 1 means unpriv group has more accurate predictions
-        priv_accuracy = overall_accuracy(priv_truth, priv_predict)
-        unpriv_accuracy = overall_accuracy(unpriv_truth, unpriv_predict)
-        all_fairness_scores[col]['stat_parity'] = priv_accuracy / unpriv_accuracy
-
         # Get statistical parity (ratio of marginal distributions)
         # close to 1 means marginal distributions are equal
         # less than 1 means priv group has fewer predicted pos than unpriv
@@ -265,6 +261,49 @@ def calc_feature_fairness_scores(data, labels, shap_values):
         all_fairness_scores[col]['treatment_eq_ratio'] = priv_treatment_eq / unpriv_treatment_eq
 
     return all_fairness_scores
+
+
+def calc_overall_fairness_scores(data, truth, predict):
+    """
+    Calculate fairness scores for overall model.
+
+    Args:
+        truth (Array): list of truth labels for the data
+        predict (Array): list of predicted labels for the data
+    Returns:
+        DataFrame: fairness scores for the model
+
+    """
+    fairness_scores = pd.DataFrame()
+
+    priv_indices = (pd.DataFrame((
+        [data.loc[data[PROTECTED_COLUMN] == PRIVILEGED_VALUE]])[0])).index
+    priv_truth = truth[priv_indices]
+
+    unpriv_indices = (pd.DataFrame((
+        [data.loc[data[PROTECTED_COLUMN] == UNPRIVILEGED_VALUE]])[0])).index
+    unpriv_truth = truth[unpriv_indices]
+
+    priv_predict = predict.loc[priv_indices, 'labels'].tolist()
+    unpriv_predict = predict.loc[unpriv_indices, 'labels'].tolist()
+
+    # Get statistical parity (ratio of marginal distributions)
+    # close to 1 means marginal distributions are equal
+    # less than 1 means priv group has fewer predicted pos than unpriv
+    # greater than 1 means priv group has more predicted pos than unpriv
+    priv_marg_dist = marginal_dist(priv_predict)
+    unpriv_marg_dist = marginal_dist(unpriv_predict)
+    fairness_scores['stat_parity'] = [priv_marg_dist / unpriv_marg_dist]
+
+    # Get treatment score, stored as ratio for comparison purposes
+    # greater than 1 means unpriv group has greater false neg to false pos ratio than priv group
+    # 1 is equal rates of false neg to false pos for both groups
+    # less than 1 means priv group has greater false neg to false pos ratio than unpriv group
+    priv_treatment_eq = treatment_score(priv_truth, priv_predict)
+    unpriv_treatment_eq = treatment_score(unpriv_truth, unpriv_predict)
+    fairness_scores['treatment_eq_ratio'] = [priv_treatment_eq / unpriv_treatment_eq]
+
+    return(fairness_scores)
 
 
 if __name__ == "__main__":
