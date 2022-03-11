@@ -2,6 +2,7 @@
 import shap
 import pandas as pd
 import numpy as np
+import math
 from sklearn import metrics, model_selection, pipeline, preprocessing
 from sklearn import tree
 
@@ -13,7 +14,6 @@ PRIVILEGED_VALUE = 1      # 1 for synthetic and for adult (indicates male)
 UNPRIVILEGED_VALUE = 0    # 0 for synthetic and for adult (indicates female)
 ITERATIONS = 100
 ACCURACY_METRIC = metrics.roc_auc_score
-MODEL = tree.DecisionTreeClassifier(random_state=11798)
 COLUMNS_SYNTH = ['group', 'fair_feature', 'unfair_feature']
 COLUMNS_ADULT = ['Age', 'Workclass', 'Education-Num', 'Marital Status',
                  'Occupation', 'Relationship', 'Race', 'Sex', 'Capital Gain',
@@ -25,10 +25,10 @@ SELECTION_METRIC = 'stat_parity' # change as desired
 SELECTION_CUTOFFS = [.1, .2, .3, .4]
 CUTOFF_VALUE = 0.2
 
-def main():
-    # define model to be used
-    model = tree.DecisionTreeClassifier(random_state=11798)
+model = tree.DecisionTreeClassifier(random_state=11798)
 
+
+def main():
     # Simulated dataset
     # ds = dataset_loader.get_simulated_data()['simulated_data']
     # X, y = ds['data'], pd.Series(ds['labels'])
@@ -64,16 +64,15 @@ def main():
         predictions = model.predict(X_test)
 
         results.append(pd.Series({
-            'model': MODEL.__class__.__name__,
+            'model': model.__class__.__name__,
             'unfairness_metric': SELECTION_METRIC,
             'auc': ACCURACY_METRIC(y_test, predictions),
             'model_fairness': calc_overall_fairness_scores(X_test, y_test, predictions),
-            'columns': selected_features
+            'columns': selected_features,
+            'cutoff': CUTOFF_VALUE
         }))
 
-    # shap_values.to_csv('fairfs_shap_results1.csv', index=False, encoding='utf-8')
-    # pred_labels.to_csv('fairfs_shap_labels1.csv', index=False, encoding='utf-8')
-    # fairness_values.to_csv('fairfs_fairness_values1.csv', index=True, encoding='utf-8')
+    pd.concat(results).to_csv('fairfs_shap_results.csv', index=False)
 
 
 def run_model(data, labels):
@@ -135,12 +134,20 @@ def select_features(columnwise_values, cutoff_value):
         columnwise_values (DataFrame): DataFrame containing fairness calculation for each column
 
     Returns:
-        Series: Series object of columns to use
+        Index: Pandas Index of columns to use
 
     """
-    col_values = columnwise_values.loc[SELECTION_METRIC]
-    # to-do: add selection mechanism
-    return col_values
+    # Get columns sorted for relevant metric
+    sorted_cols = columnwise_values.T.sort_values(by=[SELECTION_METRIC])
+
+    # Get number of columns to drop
+    cutoff_index = math.floor(CUTOFF_VALUE * len(sorted_cols))
+
+    # Drop columns with lowest scores
+    new_cols = sorted_cols.drop(sorted_cols.index[:cutoff_index])
+
+    # return list of columns as Index object
+    return new_cols.T.columns
 
 
 def convert_shap_to_bools(data, shap_values):
