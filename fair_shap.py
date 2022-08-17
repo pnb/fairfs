@@ -5,10 +5,10 @@ import numpy as np
 import math
 from sklearn import metrics, model_selection, pipeline, preprocessing
 from sklearn import tree
+import unfairness_metrics
 
 import dataset_loader
 from column_threshold_selector import ColumnThresholdSelector
-
 
 PROTECTED_COLUMN = 'Sex'  # 'Sex' for adult, 'group' for synthetic
 PRIVILEGED_VALUE = 1      # 1 for synthetic and for adult (indicates male)
@@ -21,8 +21,8 @@ COLUMNS_ADULT = ['Age', 'Workclass', 'Education-Num', 'Marital Status',
                  'Capital Loss', 'Hours per week', 'Country']
 STAT_PARITY_COLUMNS_SYNTH = ['group 1', 'group 0', 'ratio']
 STAT_PARITY_COLUMNS_ADULT = ['male', 'female', 'ratio']
-FAIRNESS_METRICS_LIST = ['stat_parity', 'treatment_eq_ratio']
-SELECTION_METRIC = 'stat_parity'  # change as desired
+# FAIRNESS_METRICS_LIST = ['stat_parity', 'treatment_eq_ratio']
+SELECTION_METRIC = 'treatment_equality'  # change as desired
 SELECTION_CUTOFFS = [.1, .2, .3, .4]
 CUTOFF_VALUE = 0.2
 
@@ -33,21 +33,43 @@ def main2():
     X, y = shap.datasets.adult()
     columns = X.columns
 
+    # create instance of unfairness metric to pass to scikit result
+    metric = unfairness_metrics.UnfairnessMetric(X[PROTECTED_COLUMN], SELECTION_METRIC)
+    # scikit learn function in order to pass as scoring metric in function
+    unfairness_scorer = metrics.make_scorer(metric)
+
     # Create list to hold fairness and accuracy for each run
-    results = []
+    # results = []
 
     # Create 10-fold cross-validation train test split for the overall model
     cross_val = model_selection.KFold(10, shuffle=True, random_state=11798)
 
-    for train_index, test_index in cross_val.split(X, y):
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-        y_train, y_test = y[train_index], y[test_index]
+    featureSelector = ColumnThresholdSelector(
+            model, PROTECTED_COLUMN, PRIVILEGED_VALUE, CUTOFF_VALUE,
+            SELECTION_METRIC, y)
 
-        X_train = pd.DataFrame(X_train, columns=columns)
-        featureSelector = ColumnThresholdSelector(
-            model, PRIVILEGED_VALUE, CUTOFF_VALUE, SELECTION_METRIC)
-        featureSelector.fit(X_train, y_train)
-        print(featureSelector.transform(X_test))
+    pipe = pipeline.Pipeline([
+        ('feature_selection', featureSelector),
+        ('model', model),
+    ])
+
+    result = model_selection.cross_validate(pipe, X, y, verbose=0, cv=cross_val, scoring={
+        'unfairness': unfairness_scorer,
+        'auc': metrics.make_scorer(ACCURACY_METRIC),
+    }, return_estimator=True)
+
+    print(result)
+
+    # results.append(pd.Series({
+    #         'model': model.__class__.__name__,
+    #         'unfairness_metric': SELECTION_METRIC,
+    #         'auc': ACCURACY_METRIC(y_test, predictions),
+    #         'model_fairness': ColumnThresholdSelector.feature_fairness(X_test, y_test, predictions),
+    #         'columns': selected_features,
+    #         'cutoff': CUTOFF_VALUE
+    #     }))
+
+    # pd.concat(result).to_csv('fairfs_shap_results_column_selector.csv', index=False)
 
 
 def main():
@@ -73,7 +95,7 @@ def main():
 
         # run initial model for feature selection on training data only
         accuracy, shap_values, pred_labels = run_model(X_train, y_train)
-        fairness_values = calc_feature_fairness_scores(X_train, y, shap_values)
+        fairness_values = calc_feature_unfairness_scores(X_train, y, shap_values)
 
         selected_features = select_features(fairness_values, CUTOFF_VALUE)
         print("features: ", selected_features)
@@ -249,7 +271,7 @@ def treatment_score(truth, predict):
     return len(fn_index) / len(fp_index)
 
 
-def calc_feature_fairness_scores(data, labels, shap_values):
+def calc_feature_unfairness_scores(data, labels, shap_values):
     """
     Calculate fairness scores for the existing metrics and store for each column.
 
