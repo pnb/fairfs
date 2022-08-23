@@ -20,35 +20,31 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 
     """
 
-    def __init__(self, model, sensitive_column, privileged_value, cutoff_value, unfairness_metric, labels):
+    def __init__(self, model, sensitive_column, privileged_value, cutoff_value, unfairness_metric):
         self.model = model
         self.sensitive_column = sensitive_column
         self.privileged_value = privileged_value
         self.cutoff_value = cutoff_value
         # string or function. if string match to existing function or people can pass in their own function
         self.unfairness_metric = unfairness_metric
-        self.labels = labels
         self.selected_features = []
-        # self.accuracy = []
-        self.shap_values = pd.DataFrame()
-        self.pred_labels = pd.DataFrame()
 
-    def fit(self, X, y=None):
+    def fit(self, X, y):
         """ actual fitting of model,
         choosing features given parameters, etc
         mostly will be moved over from run_model in fair_shap.py
         """
         assert isinstance(X, pd.DataFrame), 'Only pd.DataFrame inputs for X are supported'
         # Create the DataFrame to hold the SHAP results, labels, and accuracy
-        self.shap_values = pd.DataFrame(index=X.index, columns=X.columns)
-        self.pred_labels = pd.DataFrame(index=X.index, columns=['labels'])
+        shap_values = pd.DataFrame(index=X.index, columns=X.columns)
+        # pred_labels = pd.DataFrame(index=X.index, columns=['labels'])
 
         # Create cross-validation train test split
         cross_val = model_selection.KFold(4, shuffle=True, random_state=11798)
 
         for train_index, test_index in cross_val.split(X, y):
             X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-            y_train, y_test = y[train_index], y[test_index]
+            y_train, y_test = y.iloc[train_index], y.iloc[test_index]
 
             X_train = pd.DataFrame(X_train, columns=X.columns)
             X_test = pd.DataFrame(X_test, columns=X.columns)
@@ -66,18 +62,18 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             explainer = shap.TreeExplainer(self.model)
             current_shap_values = explainer.shap_values(X_test)
             # Only need to save one end of the range of values
-            self.shap_values.iloc[test_index] = current_shap_values[0]
+            shap_values.iloc[test_index] = current_shap_values[0]
 
             # Get predicted labels
-            self.pred_labels.iloc[test_index] = predictions[0]
+            # pred_labels.iloc[test_index] = predictions[0]
 
         # feature selection
-        fairness_values = calc_feature_unfairness_scores(X_train,
-                                                         self.labels,
-                                                         self.shap_values)
+        fairness_values = self.calc_feature_unfairness_scores(X,
+                                                              y,
+                                                              shap_values)
 
         # select features
-        self.selected_features = select_features(fairness_values, self.cutoff_value)
+        self.selected_features = self.select_features(fairness_values, self.cutoff_value)
 
         return self
 
@@ -91,10 +87,9 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         return self.fit(X, y).transform(X)
 
     def select_features(self, columnwise_values, cutoff_value):
-        """Take fairness values for each column and use the given metric to remove.
-
-        most unfair features using cutoff. "Most unfair" is measured by absolute distance
-        from 1 (which represents the classes being exactly equal)
+        """Take unfairness values for each column and use the given metric to remove.
+        most unfair features using cutoff. Larger values are more unfair, and unfairness
+        values range from 0 to 1
 
         Args:
             columnwise_values (DataFrame): DataFrame containing fairness calculation for each column
@@ -103,9 +98,6 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             Index: Pandas Index of columns to use
 
         """
-        # calculate relative unfairness by getting distance of each value from 1
-        adjusted_values = abs(columnwise_values - 1)
-
         # Get columns sorted for relevant metric (transposed to allow dropping)
         sorted_cols = adjusted_values.T.sort_values(by=[self.unfairness_metric])
 
@@ -160,7 +152,10 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         """
         cols = data.columns
         all_unfairness_scores = pd.DataFrame(index=[self.unfairness_metric], columns=cols)
-        converted_df = convert_shap_to_bools(data, shap_values)
+        converted_df = self.convert_shap_to_bools(data, shap_values)
+        print(len(labels), len(converted_df), len(data))
+        assert len(labels) == len(shap_values), "failed labels and shap"
+        assert len(data) == len(labels), "failed data and labels"
 
         for col in cols:
 
