@@ -20,8 +20,7 @@ ACCURACY_METRIC = metrics.roc_auc_score
 MODEL_LIST = [tree.DecisionTreeClassifier(random_state=11798)]
 UNFAIRNESS_METRICS_LIST = unfairness_metrics.UNFAIRNESS_METRICS
 SELECTION_METRIC = 'treatment_equality'  # change as desired
-SELECTION_CUTOFFS = [.1, .2, .3, .4]
-CUTOFF_VALUE = 0.2
+SELECTION_CUTOFFS = [.1, .2, .4, .8]
 
 
 def main():
