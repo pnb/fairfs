@@ -1,6 +1,6 @@
 # Object for selecting columns from dataset using threshold in scikit-learn pipelines.
 import pandas as pd
-import np
+import numpy as np
 import math
 import shap
 from sklearn import model_selection
@@ -37,21 +37,41 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         # Create the DataFrame to hold the SHAP results, labels, and accuracy
         shap_values = pd.DataFrame(index=X.index, columns=X.columns)
 
-        # TODO: get split of training and testing data randomly, where test is much smaller
-        #np.random_sample
+        # get split of training and testing data randomly, where test data is
+        # small subset for speed
 
+        # # separate indices by class for selecting test data --> possible preprocessing
+        # unpriv_group_mask = self.group_membership != self.privileged_value
+        # priv_group_mask = self.group_membership == self.privileged_value
+
+        # select 250 total training instances
+        rng = np.random.default_rng(42)  # seed to be deterministic for now
+        train_index = rng.integers(0, high=len(X.index), size=250)
+        test_index_mask = [index not in train_index for index in X.index]
+        X_train, X_test = X.iloc[train_index], X.iloc[test_index_mask]
+        y_train, y_test = y.iloc[train_index], y.iloc[test_index_mask]
+
+        # Run the model as defined in the constants, get predictions and accuracy
+        self.model.fit(X_train, y_train)
+        predictions = self.model.predict(X_test)
+
+        # Get shap values
+        explainer = shap.TreeExplainer(self.model)
+        current_shap_values = explainer.shap_values(X_test)
+
+        # Only need to save one end of the range of values
+        shap_values.iloc[test_index_mask] = current_shap_values[0]
+
+
+# old code
         # Create cross-validation train test split
         # cross_val = model_selection.KFold(4, shuffle=True, random_state=11798)
-        #
+
         # train_index, test_index = cross_val.split(X, y)[0]
 
-# commenting for speed
         # for train_index, test_index in cross_val.split(X, y):
         #     X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         #     y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-        #
-        #     X_train = pd.DataFrame(X_train, columns=X.columns)
-        #     X_test = pd.DataFrame(X_test, columns=X.columns)
         #
         #     # Run the model as defined in the constants, get predictions and accuracy
         #     self.model.fit(X_train, y_train)

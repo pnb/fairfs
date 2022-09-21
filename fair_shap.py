@@ -71,7 +71,7 @@ def main():
                     'unfairness': unfairnesses,
                     'auc': aucs,
                 }))
-                pd.concat(dfs).to_csv('fairfs_results.csv', index=False)
+                pd.concat(dfs).to_csv('fairfs_shap_results_09212022.csv', index=False)
 
 
 def run_experiment(X, y, model, group_membership, privileged_value, unfairness_metric, selection_cutoff):
