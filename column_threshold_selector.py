@@ -34,7 +34,8 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         mostly will be moved over from run_model in fair_shap.py
         """
         assert isinstance(X, pd.DataFrame), 'Only pd.DataFrame inputs for X are supported'
-        # Create the DataFrame to hold the SHAP results, labels, and accuracy
+        # Create the DataFrame to hold the SHAP results.
+        # must initially have index matching all of X
         shap_values = pd.DataFrame(index=X.index, columns=X.columns)
 
         # get split of training and testing data randomly, where test data is
@@ -62,6 +63,9 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         # Only need to save one end of the range of values
         shap_values.iloc[test_index_mask] = current_shap_values[0]
 
+        # drop NaN from shap_values to allow fairness calculations
+        shap_values_no_na = shap_values.dropna()
+
 
 # old code
         # Create cross-validation train test split
@@ -84,9 +88,9 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         #     shap_values.iloc[test_index] = current_shap_values[0]
 
         # feature selection
-        fairness_values = self.calc_feature_unfairness_scores(X,
-                                                              y,
-                                                              shap_values)
+        fairness_values = self.calc_feature_unfairness_scores(X_test,
+                                                              y_test,
+                                                              shap_values_no_na)
 
         # select features
         self.selected_features = self.select_features(fairness_values, self.cutoff_value)

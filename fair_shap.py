@@ -24,7 +24,7 @@ SELECTION_CUTOFFS = [.1, .2, .4, .8]
 def main():
     dfs = []
     try:
-        dfs.append(pd.read_csv('fairfs_results.csv'))
+        dfs.append(pd.read_csv('fairfs_shap_results_09212022.csv'))
     except FileNotFoundError:
         pass
 
@@ -66,7 +66,7 @@ def main():
                 dfs.append(pd.DataFrame({
                     'model': [m.__class__.__name__] * len(aucs),
                     'unfairness_metric': [unfairness_metric] * len(aucs),
-                    'unfairness_weight': [selection_cutoff] * len(aucs),
+                    'cutoff_value': [selection_cutoff] * len(aucs),
                     'iteration': range(1, len(aucs) + 1),
                     'unfairness': unfairnesses,
                     'auc': aucs,
