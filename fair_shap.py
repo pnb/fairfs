@@ -90,6 +90,7 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
         # TODO: see if doing 4-fold helps with speed up
         cross_val = model_selection.KFold(10, shuffle=True, random_state=11798)
 
+        # use i as random seed
         featureSelector = ColumnThresholdSelector(
                 model, group_membership, privileged_value, selection_cutoff,
                 unfairness_metric)

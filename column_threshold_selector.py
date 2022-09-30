@@ -27,6 +27,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         self.cutoff_value = cutoff_value
         self.unfairness_metric = unfairness_metric
         self.selected_features = []
+        # accept random_state as parameter
 
     def fit(self, X, y):
         """ Actual fitting of model,
@@ -34,9 +35,6 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         mostly will be moved over from run_model in fair_shap.py
         """
         assert isinstance(X, pd.DataFrame), 'Only pd.DataFrame inputs for X are supported'
-        # Create the DataFrame to hold the SHAP results.
-        # must initially have index matching all of X
-        shap_values = pd.DataFrame(index=X.index, columns=X.columns)
 
         # get split of training and testing data randomly, where test data is
         # small subset for speed
@@ -46,9 +44,11 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         # priv_group_mask = self.group_membership == self.privileged_value
 
         # select 250 total training instances
-        rng = np.random.default_rng(42)  # seed to be deterministic for now
-        train_index = rng.integers(0, high=len(X.index), size=250)
-        test_index_mask = [index not in train_index for index in X.index]
+        rng = np.random.default_rng(42)  # set seed to self.random_state
+        test_index = rng.integers(0, high=len(X), size=250)  # need to be unique (choice)
+
+        # all of this should be row numbers not indices
+        train_index = [index for index in range(len(X)) if index not in train_index]
         X_train, X_test = X.iloc[train_index], X.iloc[test_index_mask]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index_mask]
 
@@ -56,15 +56,13 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         self.model.fit(X_train, y_train)
         predictions = self.model.predict(X_test)
 
+        # Create the DataFrame to hold the SHAP results.
+        shap_values = pd.DataFrame(index=X_test.index, columns=X_test.columns)
+
         # Get shap values
         explainer = shap.TreeExplainer(self.model)
-        current_shap_values = explainer.shap_values(X_test)
-
-        # Only need to save one end of the range of values
-        shap_values.iloc[test_index_mask] = current_shap_values[0]
-
-        # drop NaN from shap_values to allow fairness calculations
-        shap_values_no_na = shap_values.dropna()
+        # current_shap_values = explainer.shap_values(X_test)
+        shap_values[X_test.columns] = explainer.shap_values(X_test)
 
 
 # old code
@@ -90,7 +88,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         # feature selection
         fairness_values = self.calc_feature_unfairness_scores(X_test,
                                                               y_test,
-                                                              shap_values_no_na)
+                                                              shap_values)
 
         # select features
         self.selected_features = self.select_features(fairness_values, self.cutoff_value)
