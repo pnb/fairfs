@@ -24,12 +24,12 @@ SELECTION_CUTOFFS = [.1, .2, .4, .8]
 def main():
     dfs = []
     try:
-        dfs.append(pd.read_csv('fairfs_shap_results_09212022.csv'))
+        dfs.append(pd.read_csv('fairfs_shap_results_11112022.csv'))
     except FileNotFoundError:
         pass
 
-    X, y = shap.datasets.adult()
-    y = pd.Series(y, index=X.index)
+    X, y_tmp = shap.datasets.adult()
+    y = pd.Series(y_tmp, index=X.index)
 
     # Pick the column(s) of interest to use as the group labels
     group_membership = X[PROTECTED_COLUMN]
@@ -71,7 +71,7 @@ def main():
                     'unfairness': unfairnesses,
                     'auc': aucs,
                 }))
-                pd.concat(dfs).to_csv('fairfs_shap_results_09212022.csv', index=False)
+                pd.concat(dfs).to_csv('fairfs_shap_results_11112022.csv', index=False)
 
 
 def run_experiment(X, y, model, group_membership, privileged_value, unfairness_metric, selection_cutoff):
@@ -88,12 +88,12 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
     for i in tqdm(range(ITERATIONS), desc=' Training ' + model.__class__.__name__):
         # Create 10-fold cross-validation train test split for the overall model
         # TODO: see if doing 4-fold helps with speed up
-        cross_val = model_selection.KFold(10, shuffle=True, random_state=11798)
+        cross_val = model_selection.KFold(10, shuffle=True, random_state=i)
 
         # use i as random seed
         featureSelector = ColumnThresholdSelector(
                 model, group_membership, privileged_value, selection_cutoff,
-                unfairness_metric)
+                unfairness_metric, rand_seed=i)
 
         pipe = pipeline.Pipeline([
             ('feature_selection', featureSelector),

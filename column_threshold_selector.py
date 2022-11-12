@@ -20,49 +20,53 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 
     """
 
-    def __init__(self, model, group_membership, privileged_value, cutoff_value, unfairness_metric):
+    def __init__(self, model, group_membership, privileged_value, cutoff_value, unfairness_metric, rand_seed=42):
         self.model = model
         self.group_membership = group_membership
         self.privileged_value = privileged_value
         self.cutoff_value = cutoff_value
         self.unfairness_metric = unfairness_metric
         self.selected_features = []
+        self.rand_seed = rand_seed
         # accept random_state as parameter
 
     def fit(self, X, y):
         """ Actual fitting of model,
         choosing features given parameters, etc
-        mostly will be moved over from run_model in fair_shap.py
         """
         assert isinstance(X, pd.DataFrame), 'Only pd.DataFrame inputs for X are supported'
 
         # get split of training and testing data randomly, where test data is
         # small subset for speed
-
-        # # separate indices by class for selecting test data --> possible preprocessing
-        # unpriv_group_mask = self.group_membership != self.privileged_value
-        # priv_group_mask = self.group_membership == self.privileged_value
-
-        # select 250 total training instances
-        rng = np.random.default_rng(42)  # set seed to self.random_state
-        test_index = rng.integers(0, high=len(X), size=250)  # need to be unique (choice)
-
-        # all of this should be row numbers not indices
-        train_index = [index for index in range(len(X)) if index not in train_index]
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index_mask]
-        y_train, y_test = y.iloc[train_index], y.iloc[test_index_mask]
-
+# ------------------------ 11/11
+        # # select 250 total training instances
+        # rng = np.random.default_rng(42)  # set seed to self.random_state
+        # # print(X.index)
+        # test_index = rng.choice(X.index, (250, 1), replace=False)  # select 250 test indices
+        # print("test index", test_index)
+        # X_test = X.iloc[test_index]
+        # print("x test index", X_test.index)
+        # 
+        # # all of this should be row numbers not indices
+        # train = [row for row in X ]
+        # train_index = [index for index in X.index if index not in test_index]
+        # # X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+        # X_train = X.iloc[train_index]
+        # # X_test = X.iloc[test_index]
+        # y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+# _______________________________________________________________________
+        X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=250, random_state=self.rand_seed)
         # Run the model as defined in the constants, get predictions and accuracy
         self.model.fit(X_train, y_train)
         predictions = self.model.predict(X_test)
 
         # Create the DataFrame to hold the SHAP results.
-        shap_values = pd.DataFrame(index=X_test.index, columns=X_test.columns)
+        # shap_values = pd.DataFrame(index=X_test.index, columns=X_test.columns)
 
         # Get shap values
         explainer = shap.TreeExplainer(self.model)
         # current_shap_values = explainer.shap_values(X_test)
-        shap_values[X_test.columns] = explainer.shap_values(X_test)
+        shap_values = pd.DataFrame(columns=X_test.columns, index=X_test.index, data=explainer.shap_values(X_test)[0])
 
 
 # old code
