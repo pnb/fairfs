@@ -9,6 +9,7 @@ import unfairness_metrics
 
 from column_threshold_selector import ColumnThresholdSelector
 
+FILENAME = 'fairfs_shap_results_11302022.csv'
 PROTECTED_COLUMN = 'Sex'  # 'Sex' for adult, 'group' for synthetic
 PRIVILEGED_VALUE = 1      # 1 for synthetic and for adult (indicates male)
 UNPRIVILEGED_VALUE = 0    # 0 for synthetic and for adult (indicates female)
@@ -24,8 +25,9 @@ SELECTION_CUTOFFS = [.1, .2, .4, .8]
 
 def main():
     dfs = []
+    feature_selection_dfs = []
     try:
-        dfs.append(pd.read_csv('fairfs_shap_results_11292022.csv'))
+        dfs.append(pd.read_csv(FILENAME))
     except FileNotFoundError:
         pass
 
@@ -34,6 +36,7 @@ def main():
 
     # Pick the column(s) of interest to use as the group labels
     group_membership = X[PROTECTED_COLUMN]
+    # protected_col_index = np.nonzero(X['feature_names'] == PROTECTED_COLUMN)[0][0]
 
     for m in MODEL_LIST:
         for unfairness_metric in UNFAIRNESS_METRICS_LIST:
@@ -47,22 +50,22 @@ def main():
                     print('Skipping (already done in output file)')
                     continue
 
-                # unfairnesses, aucs, selected_feature_props = run_experiment(X,
-                #                                                             y,
-                #                                                             m,
-                #                                                             group_membership,
-                #                                                             PRIVILEGED_VALUE,
-                #                                                             unfairness_metric,
-                #                                                             selection_cutoff
-                #                                                             )
-                unfairnesses, aucs = run_experiment(X,
-                                                    y,
-                                                    m,
-                                                    group_membership,
-                                                    PRIVILEGED_VALUE,
-                                                    unfairness_metric,
-                                                    selection_cutoff
-                                                    )
+                unfairnesses, aucs, selected_feature_props = run_experiment(X,
+                                                                            y,
+                                                                            m,
+                                                                            group_membership,
+                                                                            PRIVILEGED_VALUE,
+                                                                            unfairness_metric,
+                                                                            selection_cutoff
+                                                                            )
+                # unfairnesses, aucs = run_experiment(X,
+                #                                     y,
+                #                                     m,
+                #                                     group_membership,
+                #                                     PRIVILEGED_VALUE,
+                #                                     unfairness_metric,
+                #                                     selection_cutoff
+                #                                     )
 
                 dfs.append(pd.DataFrame({
                     'model': [m.__class__.__name__] * len(aucs),
@@ -72,7 +75,11 @@ def main():
                     'unfairness': unfairnesses,
                     'auc': aucs,
                 }))
-                pd.concat(dfs).to_csv('fairfs_shap_results_11112022.csv', index=False)
+                feature_selection_dfs.append(pd.DataFrame({
+                    'protected_column_selected_prop': selected_feature_props.T,
+                }))
+                pd.concat(dfs).to_csv(FILENAME, index=False)
+                pd.concat(feature_selection_dfs).to_csv(FILENAME+'_selected_features', index=False)
 
 
 def run_experiment(X, y, model, group_membership, privileged_value, unfairness_metric, selection_cutoff):
@@ -113,9 +120,9 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
             for feature_i in estimator.named_steps['feature_selection'].selected_features:
                 selected_feature_props[i][feature_i] += 1 / len(result['estimator'])
 
-    # print(result)
-    # return unfairness_means, auc_means, selected_feature_props
-    return unfairness_means, auc_means
+    # print(selected_feature_props)
+    return unfairness_means, auc_means, selected_feature_props
+    # return unfairness_means, auc_means
 
 
 if __name__ == "__main__":
