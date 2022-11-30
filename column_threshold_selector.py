@@ -4,7 +4,7 @@ import numpy as np
 import math
 import shap
 from sklearn import model_selection
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin, clone
 import unfairness_metrics
 
 
@@ -20,13 +20,14 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 
     """
 
-    def __init__(self, model, group_membership, privileged_value, cutoff_value, unfairness_metric, rand_seed=42):
-        self.model = model
+    def __init__(self, estimator, group_membership, privileged_value, cutoff_value, unfairness_metric, rand_seed=42):
+        self.estimator = estimator
         self.group_membership = group_membership
         self.privileged_value = privileged_value
         self.cutoff_value = cutoff_value
         self.unfairness_metric = unfairness_metric
         self.selected_features = []
+        self.selected_features_idx = []
         self.rand_seed = rand_seed
         # accept random_state as parameter
 
@@ -57,14 +58,15 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 # _______________________________________________________________________
         X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=250, random_state=self.rand_seed)
         # Run the model as defined in the constants, get predictions and accuracy
-        self.model.fit(X_train, y_train)
-        predictions = self.model.predict(X_test)
+        cloned_estimator = clone(self.estimator)
+        cloned_estimator.fit(X_train, y_train)
+        predictions = cloned_estimator.predict(X_test)
 
         # Create the DataFrame to hold the SHAP results.
         # shap_values = pd.DataFrame(index=X_test.index, columns=X_test.columns)
 
         # Get shap values
-        explainer = shap.TreeExplainer(self.model)
+        explainer = shap.TreeExplainer(cloned_estimator)
         # current_shap_values = explainer.shap_values(X_test)
         shap_values = pd.DataFrame(columns=X_test.columns, index=X_test.index, data=explainer.shap_values(X_test)[0])
 
@@ -96,6 +98,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 
         # select features
         self.selected_features = self.select_features(fairness_values, self.cutoff_value)
+        self.selected_features_idx = self.selected_features
 
         return self
 

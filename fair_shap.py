@@ -1,6 +1,7 @@
 # Using pyenv environment "fairfs" (Python 3.8)
 import shap
 import pandas as pd
+import numpy as np
 from tqdm import tqdm
 from sklearn import metrics, model_selection, pipeline
 from sklearn import tree, linear_model, naive_bayes
@@ -24,7 +25,7 @@ SELECTION_CUTOFFS = [.1, .2, .4, .8]
 def main():
     dfs = []
     try:
-        dfs.append(pd.read_csv('fairfs_shap_results_11112022.csv'))
+        dfs.append(pd.read_csv('fairfs_shap_results_11292022.csv'))
     except FileNotFoundError:
         pass
 
@@ -83,7 +84,8 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
     # Create lists to hold fairness and accuracy for each run
     unfairness_means = []
     auc_means = []
-    # selected_feature_props = np.zeros([ITERATIONS, X.shape[1]])
+    selected_feature_props = pd.DataFrame(data=np.zeros([X.shape[1], ITERATIONS]),
+                                          index=X.columns)
 
     for i in tqdm(range(ITERATIONS), desc=' Training ' + model.__class__.__name__):
         # Create 10-fold cross-validation train test split for the overall model
@@ -107,9 +109,9 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
 
         unfairness_means.append(result['test_unfairness'].mean())
         auc_means.append(result['test_auc'].mean())
-        # for estimator in result['estimator']:
-        #     for feature_i in estimator.named_steps['feature_selection'].k_feature_idx_:
-        #         selected_feature_props[i][feature_i] += 1 / len(result['estimator'])
+        for estimator in result['estimator']:
+            for feature_i in estimator.named_steps['feature_selection'].selected_features:
+                selected_feature_props[i][feature_i] += 1 / len(result['estimator'])
 
     # print(result)
     # return unfairness_means, auc_means, selected_feature_props
