@@ -20,16 +20,13 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 
     """
 
-    def __init__(self, estimator, group_membership, privileged_value, cutoff_value, unfairness_metric, rand_seed=42):
+    def __init__(self, estimator, group_membership, cutoff_value, unfairness_metric, rand_seed=42):
         self.estimator = estimator
         self.group_membership = group_membership
-        self.privileged_value = privileged_value
         self.cutoff_value = cutoff_value
         self.unfairness_metric = unfairness_metric
         self.selected_features = []
-        self.selected_features_idx = []
         self.rand_seed = rand_seed
-        # accept random_state as parameter
 
     def fit(self, X, y):
         """ Actual fitting of model,
@@ -62,34 +59,10 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         cloned_estimator.fit(X_train, y_train)
         predictions = cloned_estimator.predict(X_test)
 
-        # Create the DataFrame to hold the SHAP results.
-        # shap_values = pd.DataFrame(index=X_test.index, columns=X_test.columns)
-
         # Get shap values
         explainer = shap.TreeExplainer(cloned_estimator)
         # current_shap_values = explainer.shap_values(X_test)
         shap_values = pd.DataFrame(columns=X_test.columns, index=X_test.index, data=explainer.shap_values(X_test)[0])
-
-
-# old code
-        # Create cross-validation train test split
-        # cross_val = model_selection.KFold(4, shuffle=True, random_state=11798)
-
-        # train_index, test_index = cross_val.split(X, y)[0]
-
-        # for train_index, test_index in cross_val.split(X, y):
-        #     X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-        #     y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-        #
-        #     # Run the model as defined in the constants, get predictions and accuracy
-        #     self.model.fit(X_train, y_train)
-        #     predictions = self.model.predict(X_test)
-        #
-        #     # Get shap values
-        #     explainer = shap.TreeExplainer(self.model)
-        #     current_shap_values = explainer.shap_values(X_test)
-        #     # Only need to save one end of the range of values
-        #     shap_values.iloc[test_index] = current_shap_values[0]
 
         # feature selection
         fairness_values = self.calc_feature_unfairness_scores(X_test,
@@ -98,7 +71,6 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 
         # select features
         self.selected_features = self.select_features(fairness_values, self.cutoff_value)
-        self.selected_features_idx = self.selected_features
 
         return self
 
@@ -108,7 +80,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         return X[self.selected_features]
 
     def fit_transform(self, X, y=None):
-        #call fit and then call transform
+        # call fit and then call transform
         return self.fit(X, y).transform(X)
 
     def select_features(self, feature_unfairness_scores, cutoff_value):
@@ -123,7 +95,10 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             Series: Pandas Series of features to use
 
         """
+        # TO-DO add assertion that greater than 0 features will be kept
+
         # Sort unfairness values in ascending order, returns list of scores
+        # TO-DO check for ties, check if sort is stable if yes. then people can order features as they wish ahead of time
         sorted_cols = feature_unfairness_scores.sort_values()
 
         # Get number of columns to drop
