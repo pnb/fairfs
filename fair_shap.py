@@ -21,7 +21,7 @@ ACCURACY_METRIC = metrics.roc_auc_score
 #               tree.DecisionTreeClassifier(random_state=11798)]
 MODEL_LIST = [tree.DecisionTreeClassifier(random_state=11798)]
 UNFAIRNESS_METRICS_LIST = unfairness_metrics.UNFAIRNESS_METRICS
-SELECTION_CUTOFFS = [.2, .4, .6, .8]
+
 
 
 def main():
@@ -34,6 +34,7 @@ def main():
     if DATASET == 'adult':
         X, y_tmp = shap.datasets.adult()
         y = pd.Series(y_tmp, index=X.index)
+        SELECTION_CUTOFFS = [.2, .4, .6, .8]
 
     if DATASET == 'synthetic':
         ds = dataset_loader.get_simulated_data()['simulated_data']
