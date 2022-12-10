@@ -91,7 +91,7 @@ def main():
                                              unfairness_metric,
                                              selection_cutoff
                                              )
-                all_results.to_csv(FILENAME, mode='a', index=False, header=False)
+                all_results.to_csv(FILENAME, mode='a', index=False)
 
 
 def run_experiment(X, y, model, group_membership, privileged_value, unfairness_metric, selection_cutoff):
