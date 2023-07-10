@@ -27,9 +27,22 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         self.selected_features = []
         self.rand_seed = rand_seed
 
-    def fit(self, X, y):
+    def fit(self, X: pd.DataFrame, y):
         """ Actual fitting of model,
         choosing features given parameters, etc
+
+        Parameters
+        ----------
+        X : Pandas DataFrame of shape (n_samples, n_features)
+            Training vector, where `n_samples` is the number of samples and
+            `n_features` is the number of features.
+        y: array-like of shape (n_samples,)
+            Target vector relative to X.
+
+        Returns
+        -------
+        self
+            Fitted estimator.
         """
         assert isinstance(X, pd.DataFrame), 'Only pd.DataFrame inputs for X are supported'
 
@@ -45,28 +58,26 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             # Run the model as defined in the constants, get predictions and accuracy
             cloned_estimator = clone(self.estimator)
             cloned_estimator.fit(X_train, y_train)
-            # predictions = cloned_estimator.predict(X_test)
 
-        if shap.explainers.Tree.supports_model_with_masker(cloned_estimator):
-            print("true")
+            # Get shap values
+            try:
+                explainer = shap.TreeExplainer(cloned_estimator)
 
-        exit()
-        #     # Get shap values
-        #     if cloned_estimator.__class__.__name__ == '':
-        #         explainer = shap.TreeExplainer(cloned_estimator)
-        #
-        #     # current_shap_values = explainer.shap_values(X_test)
-        #     shap_values = pd.DataFrame(columns=X_test.columns, index=X_test.index, data=explainer.shap_values(X_test)[0])
-        #
-        #     # feature selection
-        #     fairness_values = self.calc_feature_unfairness_scores(X_test,
-        #                                                           y_test,
-        #                                                           shap_values)
-        #
-        # # select features
-        # self.selected_features = self.select_features(fairness_values, self.cutoff_value)
-        #
-        # return self
+            except Exception:
+                print("Tree Explainer will not work")
+                exit()
+
+            shap_values = pd.DataFrame(columns=X_test.columns, index=X_test.index, data=explainer.shap_values(X_test)[0])
+
+            # feature selection
+            fairness_values = self.calc_feature_unfairness_scores(X_test,
+                                                                  y_test,
+                                                                  shap_values)
+
+        # select features
+        self.selected_features = self.select_features(fairness_values, self.cutoff_value)
+
+        return self
 
     def transform(self, X, y=None):
         """ return data with only fair features included. y is optional for unsupervised models
@@ -116,11 +127,17 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             Series: Pandas Series of features to use
 
         """
-        # TO-DO add assertion that greater than 0 features will be kept
+        # assertion that greater than 0 features will be kept
+        assert (len(feature_unfairness_scores) * cutoff_value) < 1, \
+            "Error: The provided cut-off is too small for the number of features"
+
 
         # Sort unfairness values in ascending order, returns list of scores
-        # TO-DO check for ties, check if sort is stable if yes. then people can order features as they wish ahead of time
-        sorted_cols = feature_unfairness_scores.sort_values()
+        # Uses numpy's underlying stable sort
+        # https://numpy.org/doc/stable/reference/generated/numpy.sort.html#numpy.sort
+        # If there is a tie, users can order the features by importance before running
+        # TODO: check for ties and share message if so?
+        sorted_cols = feature_unfairness_scores.sort_values(kind='stable')
 
         # Get number of columns to drop
         cutoff_index = math.floor(self.cutoff_value * len(sorted_cols))
@@ -178,7 +195,6 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 
         for col in cols:
             shap_values = converted_df[col]
-            # group_membership = self.group_membership
             unfairness_score = unfairness_metrics.calc_unfairness(
                 labels, shap_values, self.group_membership, self.unfairness_metric)
             feature_unfairness_scores[col] = unfairness_score

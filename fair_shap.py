@@ -7,12 +7,13 @@ from sklearn import metrics, model_selection, pipeline
 from sklearn import tree, linear_model, naive_bayes
 import unfairness_metrics
 import dataset_loader
+import os
 
 from column_threshold_selector import ColumnThresholdSelector
 
 PROTECTED_COLUMN = 'Sex'  # 'Sex' for adult, 'group' for synthetic
 DATASET = 'adult'  # options currently adult or synthetic
-FILENAME = 'fairfs_shap_results_07102023.csv'
+FILENAME = 'adult_fairfs_shap_results_07102023.csv'
 PRIVILEGED_VALUE = 1      # 1 for synthetic and for adult (indicates male)
 UNPRIVILEGED_VALUE = 0    # 0 for synthetic and for adult (indicates female)
 ITERATIONS = 100
@@ -34,7 +35,6 @@ def main():
     if DATASET == 'adult':
         print("Using adult dataset")
         X, y_tmp = shap.datasets.adult()
-        print(X.columns)
         y = pd.Series(y_tmp, index=X.index)
         SELECTION_CUTOFFS = [.2, .4, .6, .8]
 
@@ -57,36 +57,12 @@ def main():
                 print('Training', m.__class__.__name__)
                 print('Unfairness metric:', unfairness_metric)
                 print('Selection cutoff:', selection_cutoff)
-                print(dfs[0])
                 if len(dfs) > 0 and sum((dfs[0].model == m.__class__.__name__)
                                         & (dfs[0].unfairness_metric == unfairness_metric)
                                         & (dfs[0].cutoff_value == selection_cutoff)) > 0:
                     print('Skipping (already done in output file)')
                     continue
 
-                # unfairnesses, aucs, selected_feature_props = run_experiment(X,
-                #                                                             y,
-                #                                                             m,
-                #                                                             group_membership,
-                #                                                             PRIVILEGED_VALUE,
-                #                                                             unfairness_metric,
-                #                                                             selection_cutoff
-                #                                                             )
-
-                # dfs.append(pd.DataFrame({
-                #     'model': [m.__class__.__name__] * len(aucs),
-                #     'unfairness_metric': [unfairness_metric] * len(aucs),
-                #     'cutoff_value': [selection_cutoff] * len(aucs),
-                #     'iteration': range(1, len(aucs) + 1),
-                #     'unfairness': unfairnesses,
-                #     'auc': aucs,
-                # }))
-                # incremental_dfs = pd.concat(dfs)
-                # incremental_feature_dfs = pd.concat(selected_feature_props)
-                #
-                # pd.concat([incremental_dfs, incremental_feature_dfs], axis='columns').to_csv(FILENAME, index=False)
-                # feature_selection_dfs.append(selected_feature_props)
-                # pd.concat(feature_selection_dfs).to_csv(FEATURE_FILENAME, index=False)
                 all_results = run_experiment(X,
                                              y,
                                              m,
@@ -95,10 +71,11 @@ def main():
                                              unfairness_metric,
                                              selection_cutoff
                                              )
-                col_names = ['model', 'unfairness_metric', 'cutoff_value', 'iteration']
-                col_names.append(X.columns)
-                all_results.columns = [col_names]
-                all_results.to_csv(FILENAME, mode='a', index=False)
+                # keep the header the first time we write to the file so we have column names
+                if os.path.isfile(FILENAME):
+                    all_results.to_csv(FILENAME, mode='a', index=False, header=False)
+                else:
+                    all_results.to_csv(FILENAME, mode='a', index=False)
 
 
 def run_experiment(X, y, model, group_membership, privileged_value, unfairness_metric, selection_cutoff):
