@@ -1,6 +1,5 @@
 # Object for selecting columns from dataset using threshold in scikit-learn pipelines.
 import pandas as pd
-import numpy as np
 import math
 import shap
 from sklearn import model_selection
@@ -34,45 +33,40 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         """
         assert isinstance(X, pd.DataFrame), 'Only pd.DataFrame inputs for X are supported'
 
-        # get split of training and testing data randomly, where test data is
+        # if dataset contains fewer than 500 rows, do a full cross-validation
+        if len(X.index) < 500:
+            fairness_values = self.estimator.full_cv_fit(X, y)
+
+        # otherwise get split of training and testing data randomly, where test data is
         # small subset for speed
-# ------------------------ 11/11
-        # # select 250 total training instances
-        # rng = np.random.default_rng(42)  # set seed to self.random_state
-        # # print(X.index)
-        # test_index = rng.choice(X.index, (250, 1), replace=False)  # select 250 test indices
-        # print("test index", test_index)
-        # X_test = X.iloc[test_index]
-        # print("x test index", X_test.index)
-        # 
-        # # all of this should be row numbers not indices
-        # train = [row for row in X ]
-        # train_index = [index for index in X.index if index not in test_index]
-        # # X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-        # X_train = X.iloc[train_index]
-        # # X_test = X.iloc[test_index]
-        # y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-# _______________________________________________________________________
-        X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=250, random_state=self.rand_seed)
-        # Run the model as defined in the constants, get predictions and accuracy
-        cloned_estimator = clone(self.estimator)
-        cloned_estimator.fit(X_train, y_train)
-        predictions = cloned_estimator.predict(X_test)
+        else:
+            X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=250, random_state=self.rand_seed)
 
-        # Get shap values
-        explainer = shap.TreeExplainer(cloned_estimator)
-        # current_shap_values = explainer.shap_values(X_test)
-        shap_values = pd.DataFrame(columns=X_test.columns, index=X_test.index, data=explainer.shap_values(X_test)[0])
+            # Run the model as defined in the constants, get predictions and accuracy
+            cloned_estimator = clone(self.estimator)
+            cloned_estimator.fit(X_train, y_train)
+            # predictions = cloned_estimator.predict(X_test)
 
-        # feature selection
-        fairness_values = self.calc_feature_unfairness_scores(X_test,
-                                                              y_test,
-                                                              shap_values)
+        if shap.explainers.Tree.supports_model_with_masker(cloned_estimator):
+            print("true")
 
-        # select features
-        self.selected_features = self.select_features(fairness_values, self.cutoff_value)
-
-        return self
+        exit()
+        #     # Get shap values
+        #     if cloned_estimator.__class__.__name__ == '':
+        #         explainer = shap.TreeExplainer(cloned_estimator)
+        #
+        #     # current_shap_values = explainer.shap_values(X_test)
+        #     shap_values = pd.DataFrame(columns=X_test.columns, index=X_test.index, data=explainer.shap_values(X_test)[0])
+        #
+        #     # feature selection
+        #     fairness_values = self.calc_feature_unfairness_scores(X_test,
+        #                                                           y_test,
+        #                                                           shap_values)
+        #
+        # # select features
+        # self.selected_features = self.select_features(fairness_values, self.cutoff_value)
+        #
+        # return self
 
     def transform(self, X, y=None):
         """ return data with only fair features included. y is optional for unsupervised models
@@ -82,6 +76,33 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
     def fit_transform(self, X, y=None):
         # call fit and then call transform
         return self.fit(X, y).transform(X)
+
+    def full_cv_fit(self, X, y):
+        shap_vals = pd.DataFrame(index=X.index, columns=X.columns)
+        cross_val = model_selection.KFold(4, shuffle=True, random_state=11798)
+
+        for train_index, test_index in cross_val.split(X, y):
+            X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+            y_train, y_test = y[train_index], y[test_index]
+
+            X_train = pd.DataFrame(X_train, columns=X.columns)
+            X_test = pd.DataFrame(X_test, columns=X.columns)
+
+            # Run the model as defined in the constants, get predictions and accuracy
+            cloned_estimator = clone(self.estimator)
+            cloned_estimator.fit(X_train, y_train)
+
+            # Get shap values
+            explainer = shap.TreeExplainer(cloned_estimator)
+            current_shap_values = explainer.shap_values(X_test)
+            # Only need to save one end of the range of values
+            shap_vals.iloc[test_index] = current_shap_values[0]
+
+        # feature selection
+        fairness_values = self.calc_feature_unfairness_scores(X,
+                                                              y,
+                                                              shap_vals)
+        return fairness_values
 
     def select_features(self, feature_unfairness_scores, cutoff_value):
         """Take unfairness values for each column and use the given metric to remove.
