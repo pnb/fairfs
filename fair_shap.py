@@ -12,7 +12,7 @@ from column_threshold_selector import ColumnThresholdSelector
 
 PROTECTED_COLUMN = 'Sex'  # 'Sex' for adult, 'group' for synthetic
 DATASET = 'adult'  # options currently adult or synthetic
-FILENAME = 'fairfs_shap_results_12012022_adult.csv'
+FILENAME = 'fairfs_shap_results_07102023.csv'
 PRIVILEGED_VALUE = 1      # 1 for synthetic and for adult (indicates male)
 UNPRIVILEGED_VALUE = 0    # 0 for synthetic and for adult (indicates female)
 ITERATIONS = 100
@@ -32,11 +32,14 @@ def main():
         pass
 
     if DATASET == 'adult':
+        print("Using adult dataset")
         X, y_tmp = shap.datasets.adult()
+        print(X.columns)
         y = pd.Series(y_tmp, index=X.index)
         SELECTION_CUTOFFS = [.2, .4, .6, .8]
 
-    if DATASET == 'synthetic':
+    elif DATASET == 'synthetic':
+        print("Using synthetic dataset")
         ds = dataset_loader.get_simulated_data()['simulated_data']
         X = pd.DataFrame(ds['data'], columns=ds['feature_names'])
         y = pd.Series(ds['labels'])
@@ -54,6 +57,7 @@ def main():
                 print('Training', m.__class__.__name__)
                 print('Unfairness metric:', unfairness_metric)
                 print('Selection cutoff:', selection_cutoff)
+                print(dfs[0])
                 if len(dfs) > 0 and sum((dfs[0].model == m.__class__.__name__)
                                         & (dfs[0].unfairness_metric == unfairness_metric)
                                         & (dfs[0].cutoff_value == selection_cutoff)) > 0:
@@ -91,6 +95,9 @@ def main():
                                              unfairness_metric,
                                              selection_cutoff
                                              )
+                col_names = ['model', 'unfairness_metric', 'cutoff_value', 'iteration']
+                col_names.append(X.columns)
+                all_results.columns = [col_names]
                 all_results.to_csv(FILENAME, mode='a', index=False)
 
 
