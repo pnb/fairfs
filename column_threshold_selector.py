@@ -62,9 +62,24 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             # Get shap values
             try:
                 explainer = shap.TreeExplainer(cloned_estimator)
+                print("Using Tree Explainer")
 
             except Exception:
-                print("Tree Explainer will not work")
+                print("Tree Explainer will not work, trying Linear Explainer")
+
+            try:
+                explainer = shap.LinearExplainer(cloned_estimator)
+                print("Using Linear Explainer")
+
+            except Exception:
+                print("Linear Explainer will not work, trying Kernel Explainer")
+
+            try:
+                explainer = shap.KernelExplainer(cloned_estimator)
+                print("Using Kernel Explainer")
+
+            except Exception:
+                print("Could not find a usable explainer model")
                 exit()
 
             shap_values = pd.DataFrame(columns=X_test.columns, index=X_test.index, data=explainer.shap_values(X_test)[0])
