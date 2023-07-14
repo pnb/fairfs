@@ -3,7 +3,7 @@ import shap
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from sklearn import metrics, model_selection, pipeline
+from sklearn import metrics, model_selection, pipeline, preprocessing
 from sklearn import tree, linear_model, naive_bayes
 import unfairness_metrics
 import dataset_loader
@@ -11,16 +11,14 @@ import os
 
 from column_threshold_selector import ColumnThresholdSelector
 
-PROTECTED_COLUMN = 'Sex'  # 'Sex' for adult, 'group' for synthetic
-DATASET = 'adult'  # options currently adult or synthetic
-FILENAME = 'adult_fairfs_shap_results_07102023.csv'
-PRIVILEGED_VALUE = 1      # 1 for synthetic and for adult (indicates male)
-UNPRIVILEGED_VALUE = 0    # 0 for synthetic and for adult (indicates female)
+PROTECTED_COLUMN = 'group'  # 'Sex' for adult, 'group' for synthetic
+DATASET = 'synthetic'  # options currently adult or synthetic
+FILENAME = 'synthetic_fairfs_gnb_shap_results_07132023.csv'
 ITERATIONS = 100
 ACCURACY_METRIC = metrics.roc_auc_score
-# MODEL_LIST = [naive_bayes.GaussianNB(), linear_model.LogisticRegression(random_state=11798),
-#               tree.DecisionTreeClassifier(random_state=11798)]
-MODEL_LIST = [tree.DecisionTreeClassifier(random_state=11798)]
+MODEL_LIST = [naive_bayes.GaussianNB()]
+# MODEL_LIST = [tree.DecisionTreeClassifier(random_state=11798)]
+# MODEL_LIST = [linear_model.LogisticRegression(random_state=11798, max_iter=400)]
 UNFAIRNESS_METRICS_LIST = unfairness_metrics.UNFAIRNESS_METRICS
 
 
@@ -34,9 +32,12 @@ def main():
 
     if DATASET == 'adult':
         print("Using adult dataset")
-        X, y_tmp = shap.datasets.adult()
+        X_tmp, y_tmp = shap.datasets.adult()
+        scaler = preprocessing.StandardScaler()
+        X = pd.DataFrame(scaler.fit_transform(X_tmp), columns=X_tmp.columns)
         y = pd.Series(y_tmp, index=X.index)
         SELECTION_CUTOFFS = [.2, .4, .6, .8]
+        PRIVILEGED_VALUE = 0     # in original data, male is 1 but after rescaling male is positive, female is negative
 
     elif DATASET == 'synthetic':
         print("Using synthetic dataset")
@@ -44,6 +45,7 @@ def main():
         X = pd.DataFrame(ds['data'], columns=ds['feature_names'])
         y = pd.Series(ds['labels'])
         SELECTION_CUTOFFS = [.4, .8]  # only 3 columns, so values smaller than .4 will select no features
+        PRIVILEGED_VALUE = 1      # 1 is the privileged group
 
     else:
         print("Please select which dataset you are using")
@@ -71,11 +73,8 @@ def main():
                                              unfairness_metric,
                                              selection_cutoff
                                              )
-                # keep the header the first time we write to the file so we have column names
-                if os.path.isfile(FILENAME):
-                    all_results.to_csv(FILENAME, mode='a', index=False, header=False)
-                else:
-                    all_results.to_csv(FILENAME, mode='a', index=False)
+                # keep the header only if the file does not yet exist
+                all_results.to_csv(FILENAME, mode='a', index=False, header=not os.path.isfile(FILENAME))
 
 
 def run_experiment(X, y, model, group_membership, privileged_value, unfairness_metric, selection_cutoff):
@@ -103,6 +102,7 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
                 unfairness_metric, rand_seed=i)
 
         pipe = pipeline.Pipeline([
+            # ('standardize', preprocessing.StandardScaler()),
             ('feature_selection', feature_selector),
             ('model', model),
         ])
@@ -133,8 +133,8 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
             # reset the index so these are within the range of the split and can be used with the predictions
             test_x = X.iloc[test_i].reset_index(drop=True)
             test_y = y.iloc[test_i].reset_index(drop=True)
-            priv_index = test_x[test_x[PROTECTED_COLUMN] == privileged_value].index
-            unpriv_index = test_x[test_x[PROTECTED_COLUMN] != privileged_value].index
+            priv_index = test_x[test_x[PROTECTED_COLUMN] >= privileged_value].index
+            unpriv_index = test_x[test_x[PROTECTED_COLUMN] < privileged_value].index
             predictions = estimator.predict(test_x)
 
             # get confusion matrix for each group

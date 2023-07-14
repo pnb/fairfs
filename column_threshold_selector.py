@@ -62,27 +62,22 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             # Get shap values
             try:
                 explainer = shap.TreeExplainer(cloned_estimator)
-                print("Using Tree Explainer")
-
+                values = explainer.shap_values(X_test)[0]
             except Exception:
-                print("Tree Explainer will not work, trying Linear Explainer")
+                try:
+                    explainer = shap.LinearExplainer(cloned_estimator, X_train)
+                    values = explainer.shap_values(X_test)
+                except Exception as e:
+                    print(e)
+                    try:
+                        explainer = shap.KernelExplainer(cloned_estimator.predict, X_train.values)
+                        values = explainer.shap_values(X_test.values)
 
-            try:
-                explainer = shap.LinearExplainer(cloned_estimator)
-                print("Using Linear Explainer")
+                    except Exception:
+                        print("Could not find a usable explainer model")
+                        exit()
 
-            except Exception:
-                print("Linear Explainer will not work, trying Kernel Explainer")
-
-            try:
-                explainer = shap.KernelExplainer(cloned_estimator)
-                print("Using Kernel Explainer")
-
-            except Exception:
-                print("Could not find a usable explainer model")
-                exit()
-
-            shap_values = pd.DataFrame(columns=X_test.columns, index=X_test.index, data=explainer.shap_values(X_test)[0])
+            shap_values = pd.DataFrame(columns=X_test.columns, index=X_test.index, data=values)
 
             # feature selection
             fairness_values = self.calc_feature_unfairness_scores(X_test,
@@ -143,7 +138,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 
         """
         # assertion that greater than 0 features will be kept
-        assert (len(feature_unfairness_scores) * cutoff_value) < 1, \
+        assert (len(feature_unfairness_scores) * cutoff_value) > 1, \
             "Error: The provided cut-off is too small for the number of features"
 
 
