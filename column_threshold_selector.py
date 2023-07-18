@@ -8,18 +8,39 @@ import unfairness_metrics
 
 
 class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
-    # to do: update doc string
-    """Object for selecting columns from a dataset given a threshold.
+    """
+    Object for selecting columns that contribute least to unfairness from a dataset given a threshold.
+    The provided threshold indicates the percentage of features to keep.
 
-    Parameters:
+    Parameters
+    ----------
         columnwise_values (DataFrame): DataFrame containing fairness calculation for each column
 
-    Returns:
+    Returns
+    ----------
         Index: Pandas Index of columns to use
 
     """
 
-    def __init__(self, estimator, group_membership, cutoff_value, unfairness_metric, rand_seed=42):
+    def __init__(self, estimator: object, group_membership: pd.DataFrame, cutoff_value: float,
+                 unfairness_metric: object, rand_seed: int = 42):
+        """
+
+        Parameters
+        ----------
+        estimator : scikit-learn estimator object
+            The estimator being used for the prediction task.
+        group_membership : pd.DataFrame
+            Boolean values referring to whether a given row is a member of the privileged class.
+        cutoff_value : float
+            The percentage of features, expressed as a decimal, to select for use in the prediction task.
+            e.g., 0.8 means 80% of the features will be kept.
+            This is rounded down to the nearest whole number when selecting features.
+        unfairness_metric : UnfairnessMetric object
+            Unfairness metric used to compare the impact of features on unfairness in the predictions.
+        rand_seed : int (default 42)
+            Integer to seed random number generator.
+        """
         self.estimator = estimator
         self.group_membership = group_membership
         self.cutoff_value = cutoff_value
@@ -53,7 +74,8 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         # otherwise get split of training and testing data randomly, where test data is
         # small subset for speed
         else:
-            X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=250, random_state=self.rand_seed)
+            X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=250,
+                                                                                random_state=self.rand_seed)
 
             # Run the model as defined in the constants, get predictions and accuracy
             cloned_estimator = clone(self.estimator)
@@ -89,16 +111,44 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 
         return self
 
-    def transform(self, X, y=None):
-        """ return data with only fair features included. y is optional for unsupervised models
+    def transform(self, X: pd.DataFrame, y=None):
+        """ return data with only fair features included. y is optional and unused
+
+        Parameters
+        ----------
+        X : Pandas DataFrame of shape (n_samples, n_features)
+            Training vector, where `n_samples` is the number of samples and
+            `n_features` is the number of features.
+        y
+
+        Returns
+        -------
+        DataFrame of shape (n_samples, m_features)
+            Training vector, where 'n_samples' is still the number of samples but m_features has
+            been trimmed to select the features that contribute to unfairness the least.
         """
         return X[self.selected_features]
 
-    def fit_transform(self, X, y=None):
+    def fit_transform(self, X: pd.DataFrame, y=None):
+        """
+
+        Parameters
+        ----------
+        X : Pandas DataFrame of shape (n_samples, n_features)
+            Training vector, where `n_samples` is the number of samples and
+            `n_features` is the number of features.
+        y: array-like of shape (n_samples,)
+            Target vector relative to X.
+
+        Returns
+        -------
+        self
+            Fitted and transformed estimator.
+        """
         # call fit and then call transform
         return self.fit(X, y).transform(X)
 
-    def full_cv_fit(self, X, y):
+    def full_cv_fit(self, X: pd.DataFrame, y):
         shap_vals = pd.DataFrame(index=X.index, columns=X.columns)
         cross_val = model_selection.KFold(4, shuffle=True, random_state=11798)
 
@@ -140,7 +190,6 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         # assertion that greater than 0 features will be kept
         assert (len(feature_unfairness_scores) * cutoff_value) > 1, \
             "Error: The provided cut-off is too small for the number of features"
-
 
         # Sort unfairness values in ascending order, returns list of scores
         # Uses numpy's underlying stable sort
