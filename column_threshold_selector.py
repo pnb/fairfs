@@ -85,19 +85,17 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             try:
                 explainer = shap.TreeExplainer(cloned_estimator)
                 values = explainer.shap_values(X_test)[0]
-            except Exception:
+            except shap.utils._exceptions.InvalidModelError:
                 try:
                     explainer = shap.LinearExplainer(cloned_estimator, X_train)
                     values = explainer.shap_values(X_test)
-                except Exception as e:
-                    print(e)
-                    try:
-                        explainer = shap.KernelExplainer(cloned_estimator.predict, X_train.values)
-                        values = explainer.shap_values(X_test.values)
-
-                    except Exception:
-                        print("Could not find a usable explainer model")
-                        exit()
+                except shap.utils._exceptions.InvalidModelError:
+                    explainer = shap.KernelExplainer(
+                        cloned_estimator.predict,
+                        X_train,
+                        keep_index=True
+                    )
+                    values = explainer.shap_values(X_test)
 
             shap_values = pd.DataFrame(columns=X_test.columns, index=X_test.index, data=values)
 
