@@ -81,23 +81,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             cloned_estimator = clone(self.estimator)
             cloned_estimator.fit(X_train, y_train)
 
-            # Get shap values
-            try:
-                explainer = shap.TreeExplainer(cloned_estimator)
-                values = explainer.shap_values(X_test)[0]
-            except shap.utils._exceptions.InvalidModelError:
-                try:
-                    explainer = shap.LinearExplainer(cloned_estimator, X_train)
-                    values = explainer.shap_values(X_test)
-                except shap.utils._exceptions.InvalidModelError:
-                    explainer = shap.KernelExplainer(
-                        cloned_estimator.predict,
-                        X_train,
-                        keep_index=True
-                    )
-                    values = explainer.shap_values(X_test)
-
-            shap_values = pd.DataFrame(columns=X_test.columns, index=X_test.index, data=values)
+            shap_values = self.fit_explainer(cloned_estimator, X_train, X_test)
 
             # feature selection
             fairness_values = self.calc_feature_unfairness_scores(X_test,
@@ -162,16 +146,49 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             cloned_estimator.fit(X_train, y_train)
 
             # Get shap values
-            explainer = shap.TreeExplainer(cloned_estimator)
-            current_shap_values = explainer.shap_values(X_test)
-            # Only need to save one end of the range of values
-            shap_vals.iloc[test_index] = current_shap_values[0]
+            shap_vals.iloc[test_index] = self.fit_explainer(cloned_estimator, X_train, X_test)
 
         # feature selection
         fairness_values = self.calc_feature_unfairness_scores(X,
                                                               y,
                                                               shap_vals)
         return fairness_values
+
+    def fit_explainer(self, estimator, X_train: pd.DataFrame, X_test: pd.DataFrame):
+        """
+
+        Parameters
+        ----------
+        estimator : scikit-learn estimator object
+        X_train : Pandas DataFrame of shape (n_samples, n_features)
+            Training vector, where `n_samples` is the number of samples and
+            `n_features` is the number of features.
+        X_test : Pandas DataFrame of shape (m_samples, m_features)
+            Test vector, where `m_samples` is the number of samples and
+            `m_features` is the number of features.
+
+        Returns
+        -------
+        Dataframe of shap values with size and shape equal to X_test (m_samples and m_features)
+
+        """
+        try:
+            explainer = shap.TreeExplainer(estimator)
+            values = explainer.shap_values(X_test)[0]
+        except shap.utils._exceptions.InvalidModelError:
+            try:
+                explainer = shap.LinearExplainer(estimator, X_train)
+                values = explainer.shap_values(X_test)
+            except shap.utils._exceptions.InvalidModelError:
+                # send in X_train sample and random seed to the explainer rather than the entire test dataset
+                explainer = shap.KernelExplainer(
+                    estimator.predict,
+                    X_train,
+                    keep_index=True
+                )
+                values = explainer.shap_values(X_test)
+
+        return pd.DataFrame(columns=X_test.columns, index=X_test.index, data=values)
 
     def select_features(self, feature_unfairness_scores, cutoff_value):
         """Take unfairness values for each column and use the given metric to remove.
