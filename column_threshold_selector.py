@@ -1,8 +1,10 @@
 # Object for selecting columns from dataset using threshold in scikit-learn pipelines.
 import pandas as pd
 import math
+import numpy as np
 import shap
 from sklearn import model_selection
+from sklearn.model_selection import cross_val_predict, cross_validate
 from sklearn.base import BaseEstimator, TransformerMixin, clone
 import unfairness_metrics
 
@@ -22,7 +24,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 
     """
 
-    def __init__(self, estimator: object, group_membership: pd.DataFrame, cutoff_value: float,
+    def __init__(self, estimator: object, group_membership: pd.Series, cutoff_value: float,
                  unfairness_metric: object, rand_seed: int = 42):
         """
 
@@ -30,7 +32,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         ----------
         estimator : scikit-learn estimator object
             The estimator being used for the prediction task.
-        group_membership : pd.DataFrame
+        group_membership : pd.Series
             Boolean values referring to whether a given row is a member of the privileged class.
         cutoff_value : float
             The percentage of features, expressed as a decimal, to select for use in the prediction task.
@@ -69,7 +71,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 
         # if dataset contains fewer than 500 rows, do a full cross-validation
         if len(X.index) < 500:
-            fairness_values = self.estimator.full_cv_fit(X, y)
+            fairness_values = self.full_cv_fit(X, y)
 
         # otherwise get split of training and testing data randomly, where test data is
         # small subset for speed
@@ -133,6 +135,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
     def full_cv_fit(self, X: pd.DataFrame, y):
         shap_vals = pd.DataFrame(index=X.index, columns=X.columns)
         cross_val = model_selection.KFold(4, shuffle=True, random_state=11798)
+        y = np.array(y)
 
         for train_index, test_index in cross_val.split(X, y):
             X_train, X_test = X.iloc[train_index], X.iloc[test_index]
@@ -270,7 +273,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         for col in cols:
             shap_values = converted_df[col]
             unfairness_score = unfairness_metrics.calc_unfairness(
-                labels, shap_values, self.group_membership, self.unfairness_metric)
+                labels, shap_values, self.group_membership[data.index], self.unfairness_metric)
             feature_unfairness_scores[col] = unfairness_score
 
         return feature_unfairness_scores

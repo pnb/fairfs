@@ -11,13 +11,13 @@ import os
 
 from column_threshold_selector import ColumnThresholdSelector
 
-PROTECTED_COLUMN = 'group'  # 'Sex' for adult, 'group' for synthetic
-DATASET = 'synthetic'  # options currently adult or synthetic
-FILENAME = 'synthetic_fairfs_gnb_shap_results_07132023.csv'
+PROTECTED_COLUMN = 'gender'  # 'Sex' for adult, 'group' for synthetic, 'gender' for mathia
+DATASET = 'mathia_gaming'  # options currently adult, synthetic, synthetic_500 (only 500 rows), mathia
+FILENAME = 'mathia_results_dt_10232023.csv'
 ITERATIONS = 100
 ACCURACY_METRIC = metrics.roc_auc_score
-MODEL_LIST = [naive_bayes.GaussianNB()]
-# MODEL_LIST = [tree.DecisionTreeClassifier(random_state=11798)]
+# MODEL_LIST = [naive_bayes.GaussianNB()]
+MODEL_LIST = [tree.DecisionTreeClassifier()]
 # MODEL_LIST = [linear_model.LogisticRegression(random_state=11798, max_iter=400)]
 UNFAIRNESS_METRICS_LIST = unfairness_metrics.UNFAIRNESS_METRICS
 
@@ -46,6 +46,31 @@ def main():
         y = pd.Series(ds['labels'])
         SELECTION_CUTOFFS = [.4, .8]  # only 3 columns, so values smaller than .4 will select no features
         PRIVILEGED_VALUE = 1      # 1 is the privileged group
+
+    elif DATASET == 'synthetic_500':
+        print("Using synthetic_500 dataset")
+        # This dataset is for testing and selects the first 500 rows of the synthetic data
+        ds = dataset_loader.get_simulated_data()['simulated_data']
+        X = pd.DataFrame(ds['data'], columns=ds['feature_names']).sample(500, replace=False)  # take random 500 rows
+        y = pd.Series(ds['labels']).loc[X.index]
+        SELECTION_CUTOFFS = [.4, .8]  # only 3 columns, so values smaller than .4 will select no features
+        PRIVILEGED_VALUE = 1      # 1 is the privileged group
+
+    elif DATASET == 'mathia_gaming':
+        # note: data is random w.r.t. label order but in order per student
+        print("Using 2022 MATHia gaming dataset")
+        ds = pd.read_csv("./data/feat_dropped_brockton2021-2022-features-with-demo-info.csv")
+        ds = ds.replace({'gender': 'F'}, 0)
+        ds = ds.replace({'gender': 'M'}, 1)
+        ds = ds.replace({'label': 'N'}, 0)
+        ds = ds.replace({'label': 'G'}, 1)
+        # ds = ds.replace('label', {'N': 0, 'G': 1}).astype(int)
+        ds = ds[ds['label'] != '?']
+        ds = ds.fillna(0)
+        X = ds.loc[:, ds.columns != 'label']
+        y = ds['label']
+        SELECTION_CUTOFFS = [.2, .4, .6, .8]
+        PRIVILEGED_VALUE = 1  # male is privileged group
 
     else:
         print("Please select which dataset you are using")
@@ -93,8 +118,13 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
                                           columns=X.columns
                                           )
     for i in tqdm(range(ITERATIONS), desc=' Training ' + model.__class__.__name__):
+        np.random.seed(i)
+
         # Create 10-fold cross-validation train test split for the overall model
-        cross_val = model_selection.KFold(10, shuffle=True, random_state=i)
+        if DATASET == 'mathia_gaming':
+            cross_val = model_selection.StratifiedKFold(10)
+        else:
+            cross_val = model_selection.KFold(10, shuffle=True, random_state=i)
 
         # use i as random seed
         feature_selector = ColumnThresholdSelector(
@@ -138,8 +168,8 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
             predictions = estimator.predict(test_x)
 
             # get confusion matrix for each group
-            matrix_priv = metrics.confusion_matrix(test_y.iloc[priv_index], predictions[priv_index])  # subset for priv
-            matrix_unpriv = metrics.confusion_matrix(test_y[unpriv_index], predictions[unpriv_index])  # subset for unrpiv
+            matrix_priv = metrics.confusion_matrix(test_y.loc[priv_index], predictions[priv_index])  # subset for priv
+            matrix_unpriv = metrics.confusion_matrix(test_y.loc[unpriv_index], predictions[unpriv_index])  # subset for unrpiv
 
             priv_cm_per_fold.iloc[i] = matrix_priv.reshape(1, 4)
             unpriv_cm_per_fold.iloc[i] = matrix_unpriv.reshape(1, 4)
