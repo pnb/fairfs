@@ -11,9 +11,9 @@ import os
 
 from column_threshold_selector import ColumnThresholdSelector
 
-PROTECTED_COLUMN = 'gender'  # 'Sex' for adult, 'group' for synthetic, 'gender' for mathia
-DATASET = 'mathia_gaming'  # options currently adult, synthetic, synthetic_500 (only 500 rows), mathia_gaming
-FILENAME = 'mathia_results_lr_01302024_ncsa.csv'
+PROTECTED_COLUMN = 'group'  # 'Sex' for adult, 'group' for synthetic, 'gender' for mathia
+DATASET = 'synthetic_500'  # options currently adult, synthetic, synthetic_500 (only 500 rows), mathia_gaming
+FILENAME = 'synthetic_500_results_lr_01302024_ncsa.csv'
 ITERATIONS = 100
 ACCURACY_METRIC = metrics.roc_auc_score
 # MODEL_LIST = [naive_bayes.GaussianNB()]

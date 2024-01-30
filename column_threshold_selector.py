@@ -25,7 +25,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, estimator: object, group_membership: pd.Series, cutoff_value: float,
-                 unfairness_metric: object, rand_seed: int = 42):
+                 unfairness_metric: object, rand_seed: int = 42, sample_groupings: pd.Series = None):
         """
 
         Parameters
@@ -49,6 +49,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         self.unfairness_metric = unfairness_metric
         self.selected_features = []
         self.rand_seed = rand_seed
+        self.sample_groupings = sample_groupings
 
     def fit(self, X: pd.DataFrame, y):
         """ Actual fitting of model,
@@ -81,7 +82,10 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
                 # all_pids = shuffle (X.user_id.unique())
                 # while < 250, select next id, grab all rows attached to that id
             # else if user id is none:
-            X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=250,
+            if sample_groupings:
+                all_pids = shuffle (self.sample_groupings.unique())
+            else:
+                X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=250,
                                                                                 random_state=self.rand_seed)
             
 
