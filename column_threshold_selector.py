@@ -76,8 +76,14 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         # otherwise get split of training and testing data randomly, where test data is
         # small subset for speed
         else:
+            # TO DO train_test_split needs to be custom in order to allow grouping
+            # hacky way, check if 'user_id' in X.columns:
+                # all_pids = shuffle (X.user_id.unique())
+                # while < 250, select next id, grab all rows attached to that id
+            # else if user id is none:
             X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=250,
                                                                                 random_state=self.rand_seed)
+            
 
             # Run the model as defined in the constants, get predictions and accuracy
             cloned_estimator = clone(self.estimator)

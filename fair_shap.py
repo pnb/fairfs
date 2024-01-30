@@ -12,13 +12,13 @@ import os
 from column_threshold_selector import ColumnThresholdSelector
 
 PROTECTED_COLUMN = 'gender'  # 'Sex' for adult, 'group' for synthetic, 'gender' for mathia
-DATASET = 'mathia_gaming'  # options currently adult, synthetic, synthetic_500 (only 500 rows), mathia
-FILENAME = 'mathia_results_dt_10232023.csv'
+DATASET = 'mathia_gaming'  # options currently adult, synthetic, synthetic_500 (only 500 rows), mathia_gaming
+FILENAME = 'mathia_results_lr_01302024_ncsa.csv'
 ITERATIONS = 100
 ACCURACY_METRIC = metrics.roc_auc_score
 # MODEL_LIST = [naive_bayes.GaussianNB()]
-MODEL_LIST = [tree.DecisionTreeClassifier()]
-# MODEL_LIST = [linear_model.LogisticRegression(random_state=11798, max_iter=400)]
+# MODEL_LIST = [tree.DecisionTreeClassifier()]
+MODEL_LIST = [linear_model.LogisticRegression(random_state=11798, max_iter=400)]
 UNFAIRNESS_METRICS_LIST = unfairness_metrics.UNFAIRNESS_METRICS
 
 
@@ -59,7 +59,7 @@ def main():
     elif DATASET == 'mathia_gaming':
         # note: data is random w.r.t. label order but in order per student
         print("Using 2022 MATHia gaming dataset")
-        ds = pd.read_csv("./data/feat_dropped_brockton2021-2022-features-with-demo-info.csv")
+        ds = pd.read_csv("./data/brockton2021-2022-features-with-demo-info.csv")
         ds = ds.replace({'gender': 'F'}, 0)
         ds = ds.replace({'gender': 'M'}, 1)
         ds = ds.replace({'label': 'N'}, 0)
@@ -102,7 +102,7 @@ def main():
                 all_results.to_csv(FILENAME, mode='a', index=False, header=not os.path.isfile(FILENAME))
 
 
-def run_experiment(X, y, model, group_membership, privileged_value, unfairness_metric, selection_cutoff):
+def run_experiment(X, y, model, group_membership, privileged_value, unfairness_metric, selection_cutoff): # add ability to pass column name for kfold groupings
     # create instance of unfairness metric to pass to scikit result
     metric = unfairness_metrics.UnfairnessMetric(group_membership, unfairness_metric)
     # scikit learn function in order to pass as scoring metric in function
@@ -121,8 +121,9 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
         np.random.seed(i)
 
         # Create 10-fold cross-validation train test split for the overall model
-        if DATASET == 'mathia_gaming':
-            cross_val = model_selection.StratifiedKFold(10)
+        if DATASET == 'mathia_gaming': # change this to if column name is not none
+            cross_val = model_selection.StratifiedKFold(10) #might still need this for gaming specifically
+            #TO-DO this should be group k fold, and then pass in column that has the student id for grouping predictions
         else:
             cross_val = model_selection.KFold(10, shuffle=True, random_state=i)
 
@@ -136,11 +137,12 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
             ('feature_selection', feature_selector),
             ('model', model),
         ])
-
+        # add variable for passing groupings, if relevant. if column is specified, then it is data from column, otherwise None
         result = model_selection.cross_validate(pipe, X, y, verbose=0, cv=cross_val, scoring={
             'unfairness': unfairness_scorer,
             'auc': metrics.make_scorer(ACCURACY_METRIC),
-        }, return_estimator=True)
+        }, # flag for groupings (check scikitlearn)
+        return_estimator=True)
 
         unfairness_means.append(result['test_unfairness'].mean())
         auc_means.append(result['test_auc'].mean())
