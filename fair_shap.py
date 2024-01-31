@@ -11,15 +11,16 @@ import os
 
 from column_threshold_selector import ColumnThresholdSelector
 
-PROTECTED_COLUMN = 'group'  # 'Sex' for adult, 'group' for synthetic, 'gender' for mathia
-DATASET = 'synthetic_500'  # options currently adult, synthetic, synthetic_500 (only 500 rows), mathia_gaming
-FILENAME = 'synthetic_500_results_lr_01302024_ncsa.csv'
+PROTECTED_COLUMN = 'gender'  # 'Sex' for adult, 'group' for synthetic, 'gender' for mathia
+DATASET = 'mathia_gaming'  # options currently adult, synthetic, synthetic_500 (only 500 rows), mathia_gaming
+FILENAME = 'mathia_gaming_results_lr_01302024_ncsa.csv'
 ITERATIONS = 100
 ACCURACY_METRIC = metrics.roc_auc_score
 # MODEL_LIST = [naive_bayes.GaussianNB()]
 # MODEL_LIST = [tree.DecisionTreeClassifier()]
 MODEL_LIST = [linear_model.LogisticRegression(random_state=11798, max_iter=400)]
 UNFAIRNESS_METRICS_LIST = unfairness_metrics.UNFAIRNESS_METRICS
+groupings_col_name = None
 
 
 
@@ -59,14 +60,15 @@ def main():
     elif DATASET == 'mathia_gaming':
         # note: data is random w.r.t. label order but in order per student
         print("Using 2022 MATHia gaming dataset")
-        ds = pd.read_csv("./data/brockton2021-2022-features-with-demo-info.csv")
+        ds = pd.read_csv("./data/brockton_2021_2022_gaming_detection_with_gender.csv")
         ds = ds.replace({'gender': 'F'}, 0)
         ds = ds.replace({'gender': 'M'}, 1)
         ds = ds.replace({'label': 'N'}, 0)
         ds = ds.replace({'label': 'G'}, 1)
-        # ds = ds.replace('label', {'N': 0, 'G': 1}).astype(int)
         ds = ds[ds['label'] != '?']
         ds = ds.fillna(0)
+        student_ids = ds['user_id']
+        groupings_col_name = 'user_id'
         X = ds.loc[:, ds.columns != 'label']
         y = ds['label']
         SELECTION_CUTOFFS = [.2, .4, .6, .8]
@@ -96,13 +98,14 @@ def main():
                                              group_membership,
                                              PRIVILEGED_VALUE,
                                              unfairness_metric,
-                                             selection_cutoff
+                                             selection_cutoff,
+                                             groupings_col_name
                                              )
                 # keep the header only if the file does not yet exist
                 all_results.to_csv(FILENAME, mode='a', index=False, header=not os.path.isfile(FILENAME))
 
 
-def run_experiment(X, y, model, group_membership, privileged_value, unfairness_metric, selection_cutoff): # add ability to pass column name for kfold groupings
+def run_experiment(X, y, model, group_membership, privileged_value, unfairness_metric, selection_cutoff, groupings_label=None): 
     # create instance of unfairness metric to pass to scikit result
     metric = unfairness_metrics.UnfairnessMetric(group_membership, unfairness_metric)
     # scikit learn function in order to pass as scoring metric in function
@@ -121,7 +124,7 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
         np.random.seed(i)
 
         # Create 10-fold cross-validation train test split for the overall model
-        if DATASET == 'mathia_gaming': # change this to if column name is not none
+        if groupings_label:
             cross_val = model_selection.StratifiedKFold(10) #might still need this for gaming specifically
             #TO-DO this should be group k fold, and then pass in column that has the student id for grouping predictions
         else:
