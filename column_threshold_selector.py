@@ -6,8 +6,8 @@ import shap
 from sklearn import model_selection
 from sklearn.model_selection import cross_val_predict, cross_validate
 from sklearn.base import BaseEstimator, TransformerMixin, clone
+from sklearn.utils import shuffle
 import unfairness_metrics
-
 
 class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
     """
@@ -82,8 +82,8 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
                 # all_pids = shuffle (X.user_id.unique())
                 # while < 250, select next id, grab all rows attached to that id
             # else if user id is none:
-            if sample_groupings:
-                all_pids = shuffle (self.sample_groupings.unique())
+            if self.sample_groupings:
+                all_pids = shuffle(self.sample_groupings.unique())
             else:
                 X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=250,
                                                                                 random_state=self.rand_seed)

@@ -60,7 +60,7 @@ def main():
     elif DATASET == 'mathia_gaming':
         # note: data is random w.r.t. label order but in order per student
         print("Using 2022 MATHia gaming dataset")
-        ds = pd.read_csv("./data/brockton_2021_2022_gaming_detection_with_gender.csv")
+        ds = pd.read_csv("./data/brockton_2021_2022_gaming_detection_with_gender_clean.csv")
         ds = ds.replace({'gender': 'F'}, 0)
         ds = ds.replace({'gender': 'M'}, 1)
         ds = ds.replace({'label': 'N'}, 0)
@@ -133,7 +133,7 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
         # use i as random seed
         feature_selector = ColumnThresholdSelector(
                 model, group_membership, selection_cutoff,
-                unfairness_metric, rand_seed=i)
+                unfairness_metric, rand_seed=i, sample_groupings=groupings_label)
 
         pipe = pipeline.Pipeline([
             # ('standardize', preprocessing.StandardScaler()),
