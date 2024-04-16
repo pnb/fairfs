@@ -126,14 +126,14 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
         # Create 10-fold cross-validation train test split for the overall model
         if groupings_label:
             cross_val = model_selection.StratifiedKFold(10) #might still need this for gaming specifically
-            #TO-DO this should be group k fold, and then pass in column that has the student id for grouping predictions
+            # TODO this should be group k fold, and then pass in column that has the student id for grouping predictions
         else:
             cross_val = model_selection.KFold(10, shuffle=True, random_state=i)
 
         # use i as random seed
         feature_selector = ColumnThresholdSelector(
                 model, group_membership, selection_cutoff,
-                unfairness_metric, rand_seed=i, sample_groupings=groupings_label)
+                unfairness_metric, rand_seed=i, sample_groupings=) # TO-DO pass sample groupings, not label)
 
         pipe = pipeline.Pipeline([
             # ('standardize', preprocessing.StandardScaler()),
