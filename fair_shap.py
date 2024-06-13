@@ -125,15 +125,16 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
 
         # Create 10-fold cross-validation train test split for the overall model
         if groupings_label:
-            cross_val = model_selection.StratifiedKFold(10) #might still need this for gaming specifically
-            # TODO this should be group k fold, and then pass in column that has the student id for grouping predictions
+            cross_val = model_selection.GroupKFold(10)  # do group k-fold here, pass column with groups later
+            group_col = X[groupings_label]
         else:
             cross_val = model_selection.KFold(10, shuffle=True, random_state=i)
+            group_col = None
 
         # use i as random seed
         feature_selector = ColumnThresholdSelector(
                 model, group_membership, selection_cutoff,
-                unfairness_metric, rand_seed=i, sample_groupings=) # TO-DO pass sample groupings, not label)
+                unfairness_metric, rand_seed=i, sample_groupings=group_col) # TODO check passing group working
 
         pipe = pipeline.Pipeline([
             # ('standardize', preprocessing.StandardScaler()),
@@ -141,10 +142,10 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
             ('model', model),
         ])
         # add variable for passing groupings, if relevant. if column is specified, then it is data from column, otherwise None
-        result = model_selection.cross_validate(pipe, X, y, verbose=0, cv=cross_val, scoring={
+        result = model_selection.cross_validate(pipe, X, y, groups=group_col, verbose=0, cv=cross_val, scoring={
             'unfairness': unfairness_scorer,
             'auc': metrics.make_scorer(ACCURACY_METRIC),
-        }, # flag for groupings (check scikitlearn)
+        },
         return_estimator=True)
 
         unfairness_means.append(result['test_unfairness'].mean())
