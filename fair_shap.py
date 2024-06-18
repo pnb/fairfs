@@ -23,7 +23,6 @@ UNFAIRNESS_METRICS_LIST = unfairness_metrics.UNFAIRNESS_METRICS
 groupings_col_name = None
 
 
-
 def main():
     dfs = []
     try:

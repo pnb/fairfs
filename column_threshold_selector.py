@@ -51,7 +51,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         self.rand_seed = rand_seed
         self.sample_groupings = sample_groupings
 
-    def fit(self, X: pd.DataFrame, y):
+    def fit(self, X: pd.DataFrame, y: pd.Series):
         """ Actual fitting of model,
         choosing features given parameters, etc
 
@@ -77,20 +77,26 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         # otherwise get split of training and testing data randomly, where test data is
         # small subset for speed
         else:
-            if self.sample_groupings:
+            if self.sample_groupings is not None:
                 breakpoint()
                 all_pids = shuffle(self.sample_groupings.unique())
                 X_train = []
+                y_train = []
                 while len(X_train) < 250:
                     cur_pid = all_pids[0]
                     all_pids = all_pids[1:]
-                    cur_pid_rows = X[self.sample_groupings == cur_pid]
-                    X_train.append(cur_pid_rows)
+                    cur_X_pid_rows = X[self.sample_groupings == cur_pid]
+                    cur_y_pid_rows = y[self.sample_groupings == cur_pid]
+                    X_train.append(cur_X_pid_rows)
+                    y_train.append(cur_y_pid_rows)
+
                 
                 X_train = pd.concat(X_train)  # might be more than 250, needed because we don't want data leakage from train to test
-        
-                # TODO: use index of rows we have to select matching y_train, everything but those are X_test and y_test
-            
+                y_train = pd.concat(y_train)
+                assert X_train.index.equals(y_train.index),  "Training data and labels do not have matching indices"
+                X_test = X.drop(index=X_train.index)
+                y_test = y.drop(index=y_train.index)
+
             else:
                 X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=250,
                                                                                 random_state=self.rand_seed)
