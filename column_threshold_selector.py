@@ -42,6 +42,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             Unfairness metric used to compare the impact of features on unfairness in the predictions.
         rand_seed : int (default 42)
             Integer to seed random number generator.
+            TO DO: document sample_groupings
         """
         self.estimator = estimator
         self.group_membership = group_membership
