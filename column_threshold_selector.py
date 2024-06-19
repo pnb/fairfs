@@ -74,26 +74,29 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         # if dataset contains fewer than 500 rows, do a full cross-validation
         if len(X.index) < 500:
             fairness_values = self.full_cv_fit(X, y)
+            # TODO is this different if there are groups and fewer than 500 datapoints?
 
         # otherwise get split of training and testing data randomly, where test data is
         # small subset for speed
         else:
             if self.sample_groupings is not None:
-                breakpoint()
                 all_pids = shuffle(self.sample_groupings.unique())
-                X_train = []
-                y_train = []
+                # breakpoint()
+                X_train = pd.DataFrame()
+                y_train = pd.Series()
                 while len(X_train) < 250:
+                    # need breakpoint here
+                    # breakpoint()
                     cur_pid = all_pids[0]
                     all_pids = all_pids[1:]
-                    cur_X_pid_rows = X[self.sample_groupings == cur_pid]
-                    cur_y_pid_rows = y[self.sample_groupings == cur_pid]
-                    X_train.append(cur_X_pid_rows)
-                    y_train.append(cur_y_pid_rows)
+                    cur_X_pid_rows = X.loc[self.sample_groupings == cur_pid]
+                    cur_y_pid_rows = y.loc[self.sample_groupings == cur_pid]
+                    X_train = pd.concat([X_train, cur_X_pid_rows])
+                    y_train = pd.concat([y_train, cur_y_pid_rows])
 
                 
-                X_train = pd.concat(X_train)  # might be more than 250, needed because we don't want data leakage from train to test
-                y_train = pd.concat(y_train)
+                # X_train = pd.concat(X_train)  # might be more than 250, needed because we don't want data leakage from train to test
+                # y_train = pd.concat(y_train)
                 assert X_train.index.equals(y_train.index),  "Training data and labels do not have matching indices"
                 X_test = X.drop(index=X_train.index)
                 y_test = y.drop(index=y_train.index)
