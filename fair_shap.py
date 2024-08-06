@@ -67,8 +67,8 @@ def main():
         ds = ds[ds['label'] != '?']
         ds = ds.fillna(0)
         student_ids = ds['user_id']
-        groupings_col_name = 'user_id'
-        X = ds.loc[:, ds.columns != 'label']
+        groupings_data = ds['user_id']
+        X = ds.loc[:, ~ds.columns.isin(['label', 'user_id'])]
         y = ds['label']
         SELECTION_CUTOFFS = [.2, .4, .6, .8]
         PRIVILEGED_VALUE = 1  # male is privileged group
@@ -98,13 +98,13 @@ def main():
                                              PRIVILEGED_VALUE,
                                              unfairness_metric,
                                              selection_cutoff,
-                                             groupings_col_name
+                                             groupings_data
                                              )
                 # keep the header only if the file does not yet exist
                 all_results.to_csv(FILENAME, mode='a', index=False, header=not os.path.isfile(FILENAME))
 
 
-def run_experiment(X, y, model, group_membership, privileged_value, unfairness_metric, selection_cutoff, groupings_label=None): 
+def run_experiment(X, y, model, group_membership, privileged_value, unfairness_metric, selection_cutoff, groupings_data=None): 
     # create instance of unfairness metric to pass to scikit result
     metric = unfairness_metrics.UnfairnessMetric(group_membership, unfairness_metric)
     # scikit learn function in order to pass as scoring metric in function
@@ -123,17 +123,15 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
         np.random.seed(i)
 
         # Create 10-fold cross-validation train test split for the overall model
-        if groupings_label:
+        if groupings_data is not None:
             cross_val = model_selection.GroupKFold(10)  # do group k-fold here, pass column with groups later
-            group_col = X[groupings_label]
         else:
             cross_val = model_selection.KFold(10, shuffle=True, random_state=i)
-            group_col = None
 
         # use i as random seed
         feature_selector = ColumnThresholdSelector(
                 model, group_membership, selection_cutoff,
-                unfairness_metric, rand_seed=i, sample_groupings=group_col) # TODO check passing group working
+                unfairness_metric, rand_seed=i, sample_groupings=groupings_data) # TODO check passing group working
 
         pipe = pipeline.Pipeline([
             # ('standardize', preprocessing.StandardScaler()),
@@ -141,7 +139,7 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
             ('model', model),
         ])
         # add variable for passing groupings, if relevant. if column is specified, then it is data from column, otherwise None
-        result = model_selection.cross_validate(pipe, X, y, groups=group_col, verbose=0, cv=cross_val, scoring={
+        result = model_selection.cross_validate(pipe, X, y, groups=groupings_data, verbose=0, cv=cross_val, scoring={
             'unfairness': unfairness_scorer,
             'auc': metrics.make_scorer(ACCURACY_METRIC),
         },
@@ -163,7 +161,7 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
                                           columns=['unpriv_tn', 'unpriv_fp', 'unpriv_fn', 'unpriv_tp']
                                           )
         i = 0
-        for fold_i, (train_i, test_i) in enumerate(cross_val.split(X, y)):
+        for fold_i, (train_i, test_i) in enumerate(cross_val.split(X, y, groups=groupings_data)):
             estimator = result['estimator'][fold_i]
             # reset the index so these are within the range of the split and can be used with the predictions
             test_x = X.iloc[test_i].reset_index(drop=True)

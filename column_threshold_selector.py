@@ -42,7 +42,8 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             Unfairness metric used to compare the impact of features on unfairness in the predictions.
         rand_seed : int (default 42)
             Integer to seed random number generator.
-            TO DO: document sample_groupings
+        sample_groupings : pd.Series (default None)
+            Group labels for each row
         """
         self.estimator = estimator
         self.group_membership = group_membership
@@ -74,23 +75,26 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         # if dataset contains fewer than 500 rows, do a full cross-validation
         if len(X.index) < 500:
             fairness_values = self.full_cv_fit(X, y)
-            # TODO is this different if there are groups and fewer than 500 datapoints?
+            # TODO is this different if there are groups *and*  fewer than 500 datapoints?
 
         # otherwise get split of training and testing data randomly, where test data is
         # small subset for speed
         else:
             if self.sample_groupings is not None:
-                all_pids = shuffle(self.sample_groupings.unique())
+                # TODO only select the sample groupings from this fold
+                cur_sample_groupings = self.sample_groupings.loc[X.index]
+                cur_pids = shuffle(cur_sample_groupings.unique())
                 # breakpoint()
                 X_train = pd.DataFrame()
                 y_train = pd.Series()
                 while len(X_train) < 250:
                     # need breakpoint here
                     # breakpoint()
-                    cur_pid = all_pids[0]
-                    all_pids = all_pids[1:]
-                    cur_X_pid_rows = X.loc[self.sample_groupings == cur_pid]
-                    cur_y_pid_rows = y.loc[self.sample_groupings == cur_pid]
+                    cur_pid = cur_pids[0]
+                    cur_pids = cur_pids[1:]
+                    # TODO fix this to only select the groupings from inside this fold 
+                    cur_X_pid_rows = X[cur_sample_groupings == cur_pid]
+                    cur_y_pid_rows = y[cur_sample_groupings == cur_pid]
                     X_train = pd.concat([X_train, cur_X_pid_rows])
                     y_train = pd.concat([y_train, cur_y_pid_rows])
 
@@ -138,6 +142,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
             Training vector, where 'n_samples' is still the number of samples but m_features has
             been trimmed to select the features that contribute to unfairness the least.
         """
+        # assert isinstance(X, pd.DataFrame), 'Only pd.DataFrame inputs for X are supported' ## this assertion caused a failure?
         return X[self.selected_features]
 
     def fit_transform(self, X: pd.DataFrame, y=None):
