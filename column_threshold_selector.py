@@ -52,6 +52,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         self.selected_features = []
         self.rand_seed = rand_seed
         self.sample_groupings = sample_groupings
+        # self.info_printed = False
 
     def fit(self, X: pd.DataFrame, y: pd.Series):
         """ Actual fitting of model,
@@ -209,10 +210,14 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         """
         try:
             explainer = shap.TreeExplainer(estimator)
+            # if not self.info_printed:
+                # print("using tree explainer")
             values = explainer.shap_values(X_test)[0]
         except shap.utils._exceptions.InvalidModelError:
             try:
                 explainer = shap.LinearExplainer(estimator, X_train)
+                # if not self.info_printed:
+                    # print("using linear explainer")
                 values = explainer.shap_values(X_test)
             except shap.utils._exceptions.InvalidModelError:
                 # send in X_train sample and random seed to the explainer rather than the entire test dataset
@@ -221,8 +226,11 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
                     X_train,
                     keep_index=True
                 )
+                # if not self.info_printed:
+                    # print("using kernel explainer")
                 values = explainer.shap_values(X_test)
 
+        # self.info_printed = True
         return pd.DataFrame(columns=X_test.columns, index=X_test.index, data=values)
 
     def select_features(self, feature_unfairness_scores, cutoff_value):

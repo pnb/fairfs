@@ -19,6 +19,7 @@ ACCURACY_METRIC = metrics.roc_auc_score
 # MODEL_LIST = [naive_bayes.GaussianNB()]
 # MODEL_LIST = [tree.DecisionTreeClassifier()]
 MODEL_LIST = [linear_model.LogisticRegression(random_state=11798, max_iter=400)]
+
 UNFAIRNESS_METRICS_LIST = unfairness_metrics.UNFAIRNESS_METRICS
 groupings_col_name = None
 
@@ -32,10 +33,7 @@ def main():
 
     if DATASET == 'adult':
         print("Using adult dataset")
-        X_tmp, y_tmp = shap.datasets.adult()
-        scaler = preprocessing.StandardScaler()
-        X = pd.DataFrame(scaler.fit_transform(X_tmp), columns=X_tmp.columns)
-        y = pd.Series(y_tmp, index=X.index)
+        X, y = shap.datasets.adult()
         SELECTION_CUTOFFS = [.2, .4, .6, .8]
         PRIVILEGED_VALUE = 0     # in original data, male is 1 but after rescaling male is positive, female is negative
 
@@ -124,9 +122,9 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
 
         # Create 10-fold cross-validation train test split for the overall model
         if groupings_data is not None:
-            cross_val = model_selection.GroupKFold(10)  # do group k-fold here, pass column with groups later
+            cross_val = model_selection.StratifiedGroupKFold(10, shuffle=True, random_state=i)  # do group k-fold here, pass column with groups later
         else:
-            cross_val = model_selection.KFold(10, shuffle=True, random_state=i)
+            cross_val = model_selection.StratifiedKFold(10, shuffle=True, random_state=i)
 
         # use i as random seed
         feature_selector = ColumnThresholdSelector(
@@ -134,7 +132,7 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
                 unfairness_metric, rand_seed=i, sample_groupings=groupings_data) # TODO check passing group working
 
         pipe = pipeline.Pipeline([
-            # ('standardize', preprocessing.StandardScaler()),
+            ('standardize', preprocessing.StandardScaler().set_output(transform='pandas')),
             ('feature_selection', feature_selector),
             ('model', model),
         ])
@@ -171,8 +169,9 @@ def run_experiment(X, y, model, group_membership, privileged_value, unfairness_m
             predictions = estimator.predict(test_x)
 
             # get confusion matrix for each group
-            matrix_priv = metrics.confusion_matrix(test_y.loc[priv_index], predictions[priv_index])  # subset for priv
-            matrix_unpriv = metrics.confusion_matrix(test_y.loc[unpriv_index], predictions[unpriv_index])  # subset for unrpiv
+            matrix_priv = metrics.confusion_matrix(test_y.loc[priv_index], predictions[priv_index], labels=[0, 1])  # subset for priv
+            # print(matrix_priv)
+            matrix_unpriv = metrics.confusion_matrix(test_y.loc[unpriv_index], predictions[unpriv_index], labels=[0, 1])  # subset for unpriv
 
             priv_cm_per_fold.iloc[i] = matrix_priv.reshape(1, 4)
             unpriv_cm_per_fold.iloc[i] = matrix_unpriv.reshape(1, 4)
