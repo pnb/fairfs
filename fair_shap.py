@@ -8,21 +8,22 @@ from sklearn import tree, linear_model, naive_bayes
 import unfairness_metrics
 import dataset_loader
 import os
+import sys
 
 from column_threshold_selector import ColumnThresholdSelector
 
-PROTECTED_COLUMN = 'gender'  # 'Sex' for adult, 'group' for synthetic, 'gender' for mathia
-DATASET = 'mathia_gaming'  # options currently adult, synthetic, synthetic_500 (only 500 rows), mathia_gaming
-FILENAME = 'mathia_gaming_results_lr_06182024_ncsa.csv'
+PROTECTED_COLUMN = 'Gender'  # 'Sex' for adult, 'group' for synthetic, 'gender' for its_gaming and fh2t ('Gender')
+DATASET = 'fh2t'  # options currently adult, synthetic, synthetic_500 (only 500 rows), its_gaming, fh2t
+FILENAME = 'fh2t_results_lr_03252025_ncsa.csv'
 ITERATIONS = 100
 ACCURACY_METRIC = metrics.roc_auc_score
 # MODEL_LIST = [naive_bayes.GaussianNB()]
-# MODEL_LIST = [tree.DecisionTreeClassifier()]
+# MODEL_LIST = [tree.DecisionTreeClassifier(random_state=11798)]
 MODEL_LIST = [linear_model.LogisticRegression(random_state=11798, max_iter=400)]
 
 UNFAIRNESS_METRICS_LIST = unfairness_metrics.UNFAIRNESS_METRICS
 groupings_col_name = None
-
+groupings_data = None
 
 def main():
     dfs = []
@@ -42,6 +43,7 @@ def main():
         ds = dataset_loader.get_simulated_data()['simulated_data']
         X = pd.DataFrame(ds['data'], columns=ds['feature_names'])
         y = pd.Series(ds['labels'])
+        groupings_data = None
         SELECTION_CUTOFFS = [.4, .8]  # only 3 columns, so values smaller than .4 will select no features
         PRIVILEGED_VALUE = 1      # 1 is the privileged group
 
@@ -51,13 +53,14 @@ def main():
         ds = dataset_loader.get_simulated_data()['simulated_data']
         X = pd.DataFrame(ds['data'], columns=ds['feature_names']).sample(500, replace=False)  # take random 500 rows
         y = pd.Series(ds['labels']).loc[X.index]
+        groupings_data = None
         SELECTION_CUTOFFS = [.4, .8]  # only 3 columns, so values smaller than .4 will select no features
         PRIVILEGED_VALUE = 1      # 1 is the privileged group
 
-    elif DATASET == 'mathia_gaming':
+    elif DATASET == 'its_gaming':
         # note: data is random w.r.t. label order but in order per student
-        print("Using 2022 MATHia gaming dataset")
-        ds = pd.read_csv("./data/brockton_2021_2022_gaming_detection_with_gender_clean.csv")
+        print("Using 2022 ITS gaming dataset")
+        ds = pd.read_csv("./data/2021_2022_gaming_detection_with_gender_clean.csv")
         ds = ds.replace({'gender': 'F'}, 0)
         ds = ds.replace({'gender': 'M'}, 1)
         ds = ds.replace({'label': 'N'}, 0)
@@ -71,8 +74,20 @@ def main():
         SELECTION_CUTOFFS = [.2, .4, .6, .8]
         PRIVILEGED_VALUE = 1  # male is privileged group
 
+    elif DATASET == 'fh2t':
+        print("Using fh2t dataset")
+        ds = pd.read_csv("./data/fh2t_clean_with_gender_and_delayed_posttest.csv")
+        ds = ds.replace({'Gender': 'F'}, 0)
+        ds = ds.replace({'Gender': 'M'}, 1)
+        X = ds.loc[:, ~ds.columns.isin(['label', 'StuID'])]
+        y = ds['label']
+        groupings_data = None
+        SELECTION_CUTOFFS = [.2, .4, .6, .8]
+        PRIVILEGED_VALUE = 1  # male is privileged group
+
     else:
         print("Please select which dataset you are using")
+        sys.exit()
 
     # Pick the column(s) of interest to use as the group labels
     group_membership = X[PROTECTED_COLUMN]
