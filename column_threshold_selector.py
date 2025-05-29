@@ -82,33 +82,38 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         # small subset for speed
         else:
             if self.sample_groupings is not None:
-                # TODO only select the sample groupings from this fold
-                cur_sample_groupings = self.sample_groupings.loc[X.index]
-                cur_pids = shuffle(cur_sample_groupings.unique())
-                # breakpoint()
-                X_train = pd.DataFrame()
-                y_train = pd.Series()
-                while len(X_train) < 250:
-                    # need breakpoint here
+                for _ in range(1000):
+                    # only select the sample groupings from this fold
+                    cur_sample_groupings = self.sample_groupings.loc[X.index]
+                    cur_pids = shuffle(cur_sample_groupings.unique())
                     # breakpoint()
-                    cur_pid = cur_pids[0]
-                    cur_pids = cur_pids[1:]
-                    # TODO fix this to only select the groupings from inside this fold 
-                    cur_X_pid_rows = X[cur_sample_groupings == cur_pid]
-                    cur_y_pid_rows = y[cur_sample_groupings == cur_pid]
-                    X_train = pd.concat([X_train, cur_X_pid_rows])
-                    y_train = pd.concat([y_train, cur_y_pid_rows])
+                    X_train = pd.DataFrame()
+                    y_train = pd.Series()
+                    
+                    while len(X_train) < 250:
+                        # breakpoint()
+                        cur_pid = cur_pids[0]
+                        cur_pids = cur_pids[1:]
+                        # only select the groupings from inside this fold 
+                        cur_X_pid_rows = X[cur_sample_groupings == cur_pid]
+                        cur_y_pid_rows = y[cur_sample_groupings == cur_pid]
+                        X_train = pd.concat([X_train, cur_X_pid_rows])
+                        y_train = pd.concat([y_train, cur_y_pid_rows])
 
-                
-                # X_train = pd.concat(X_train)  # might be more than 250, needed because we don't want data leakage from train to test
-                # y_train = pd.concat(y_train)
-                assert X_train.index.equals(y_train.index),  "Training data and labels do not have matching indices"
-                X_test = X.drop(index=X_train.index)
-                y_test = y.drop(index=y_train.index)
+                    assert X_train.index.equals(y_train.index),  "Training data and labels do not have matching indices"
+                    X_test = X.drop(index=X_train.index)
+                    y_test = y.drop(index=y_train.index)
+
+                    #check if y_train and y_test both contain the same number of unique values 
+                    # guarantee there is at least 1 label of each class
+                    if y_train.nunique() == y_test.nununique():
+                        break
+                else:
+                    assert False, "No train/test split exists that contains proper label distribution"
 
             else:
                 X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, test_size=250,
-                                                                                random_state=self.rand_seed)
+                                                                                random_state=self.rand_seed) # add stratification (stratified k fold object inside of for-loop and just get first fold and then break)
             
 
             # Run the model as defined in the constants, get predictions and accuracy
@@ -167,7 +172,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
 
     def full_cv_fit(self, X: pd.DataFrame, y):
         shap_vals = pd.DataFrame(index=X.index, columns=X.columns)
-        cross_val = model_selection.KFold(4, shuffle=True, random_state=11798)
+        cross_val = model_selection.KFold(4, shuffle=True, random_state=11798) # needs to be stratifiedKFold
         y = np.array(y)
 
         for train_index, test_index in cross_val.split(X, y):
@@ -311,6 +316,7 @@ class ColumnThresholdSelector(BaseEstimator, TransformerMixin):
         assert len(data) == len(labels), "Error: length of data is not equal to length of labels"
 
         for col in cols:
+            #TODO come back and rename "shap_values" here to something more legible like shap_bools
             shap_values = converted_df[col]
             unfairness_score = unfairness_metrics.calc_unfairness(
                 labels, shap_values, self.group_membership[data.index], self.unfairness_metric)
